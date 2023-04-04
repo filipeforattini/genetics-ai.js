@@ -13,7 +13,7 @@ export default [
 
     output: {
       format: 'cjs',
-      file: './dist/app.min.js'
+      file: './dist/app.cjs.min.js'
     },
 
     plugins: [
@@ -40,7 +40,57 @@ export default [
 
     output: {
       format: 'cjs',
-      file: './dist/app.js'
+      file: './dist/app.cjs.js'
+    },
+
+    plugins: [
+      globals(),
+      builtins(),
+      nodePolyfills(),
+      commonjs(),
+      nodeResolve({
+        main: true,
+        jsnext: true,
+        browser: true,
+      }),
+      filesize(),
+      minify({
+        mangle: true
+      }),
+    ],
+  },
+  {
+    input: 'src/index.js',
+
+    output: {
+      name: 'genetics',
+      format: 'umd',
+      file: './dist/app.umd.js'
+    },
+
+    plugins: [
+      globals(),
+      builtins(),
+      nodePolyfills(),
+      commonjs(),
+      nodeResolve({
+        main: true,
+        jsnext: true,
+        browser: true,
+      }),
+      filesize(),
+      minify({
+        mangle: true
+      }),
+    ],
+  },
+  {
+    input: 'src/index.js',
+
+    output: {
+      name: 'genetics',
+      format: 'esm',
+      file: './dist/app.esm.js'
     },
 
     plugins: [
