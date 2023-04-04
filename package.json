@@ -1,6 +1,6 @@
 {
   "name": "genetics-ai.js",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A Genetic Algorithm AI lib for JS",
   "main": "./dist/app.js",
   "author": "filipeforattini",
