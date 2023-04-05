@@ -44,3 +44,17 @@ describe('genome creation', () => {
     expect(genome.nodes.length <= 3).toBeTruthy()
   })
 })
+
+describe('reproduction', () => {
+  test('sexual', () => {
+    const genA = new Genome({ base32: ['000001', 'g0g001'] })
+    const genB = new Genome({ base32: ['010101', 'g1g101'] })
+
+    const [childA, childB] = Genome.sexualReproduction(genA, genB)
+    
+    expect(childA.bases[0]).toEqual(genA.bases[0])
+    expect(childA.bases[1]).toEqual(genB.bases[0])
+    expect(childB.bases[0]).toEqual(genA.bases[1])
+    expect(childB.bases[1]).toEqual(genB.bases[1])
+  })
+})

@@ -1,19 +1,21 @@
 import { Individual } from "./individual.class.js"
+import { Pool } from './mating/index.js'
 
 export class Generation {
   constructor({
     size,
     individualOptions = {},
     individualInterface = Individual,
-    fitnessFunction = function (individual) { individual.health }
+    fitnessFunction = function (individual) { individual.health },
+    matingStrategy = [Pool],
   }) {
     this.size = size
-    this.individuals = []
-
     this.individualInterface = individualInterface
     this.individualOptions = individualOptions
     this.fitnessFunction = fitnessFunction
+    this.matingStrategies = matingStrategy
 
+    this.individuals = []
     this.demographics = {
       total: 0,
       random: 0,
@@ -24,11 +26,13 @@ export class Generation {
     size,
     individualOptions = {},
     individualInterface = Individual,
+    fitnessFunction,
   }) {
     const gen = new Generation({
       size,
       individualInterface,
       individualOptions,
+      fitnessFunction,
     })
 
     gen.fill()
@@ -52,11 +56,11 @@ export class Generation {
     const winnersCount = Math.floor(topPerformers * generation.individuals.length)
 
     let winners = generation.individuals
-    if(justAlive) winners = winners.filter(x => x.health > 0)
+    if (justAlive) winners = winners.filter(x => x.health > 0)
     winners = winners.slice(0, winnersCount)
 
     const children = winners.flatMap(g => g.children(childrenPerIndividual))
-    
+
     gen.individuals = children
     gen.fill()
 
@@ -67,6 +71,16 @@ export class Generation {
     }
 
     return gen
+  }
+
+  createIndividualFromGenome(genome) {
+    const ind = new this.individualInterface({
+      genome,
+      ...this.individualOptions,
+    })
+
+    this.individuals.push(ind)
+    return ind
   }
 
   fill() {
@@ -83,6 +97,26 @@ export class Generation {
 
     this.demographics.random += individualsPack.length
     this.demographics.total += individualsPack.length
+
+    this.fitness = new Array(this.individuals.length).fill(-1)
+  }
+
+  fit() {
+    this.fitness = this.individuals.map(this.fitnessFunction)
+    return this.fitness
+  }
+
+  next() {
+    this.fit()
+
+    let gen
+    for (const StrategyInterface of this.matingStrategies) {
+      const strategy = new StrategyInterface(this)
+      gen = strategy.run()
+    }
+
+    gen.fill()
+    return gen
   }
 
   toArray() {
@@ -91,5 +125,15 @@ export class Generation {
 
   toJSON() {
     return this.individuals.map(i => i.toJSON())
+  }
+
+  exportParams() {
+    return {
+      size: this.size,
+      individualInterface: this.individualInterface,
+      individualOptions: this.individualOptions,
+      fitnessFunction: this.fitnessFunction,
+      matingStrategy: this.matingStrategies,
+    }
   }
 }

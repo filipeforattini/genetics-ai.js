@@ -8,6 +8,7 @@ import {
   randomAlpha,
   fromBase32ToBin,
   fromBinToBase32,
+  chunk,
 } from "./concerns/index.js"
 
 export class Genome {
@@ -18,10 +19,12 @@ export class Genome {
       .concat(bases)
 
     this.nodes = this.getNodes()
+    this.size = this.bases.length
+    this.length = this.bases.length
   }
 
   static copy(genome) {
-    const bases = genome.bases.map((b) => new Base(b.data))
+    const bases = genome.bases.map(b => new Base({ ...b }))
     return new this({ bases })
   }
 
@@ -87,6 +90,25 @@ export class Genome {
       })
 
     return asArray ? base32 : new this({ base32 })
+  }
+
+  static sexualReproduction(genA, genB) {
+    const middle = Math.floor(genA.size / 2)
+
+    const meiosisA = [
+      genA.bases.slice(0, middle).map(b => new Base({ ...b })),
+      genA.bases.slice(middle, genA.size).map(b => new Base({ ...b })),
+    ]
+
+    const meiosisB = [
+      genB.bases.slice(0, middle).map(b => new Base({ ...b })),
+      genB.bases.slice(middle, genB.size).map(b => new Base({ ...b })),
+    ]
+
+    return [
+      new Genome({ bases: [].concat(meiosisA[0].concat(meiosisB[0])) }),
+      new Genome({ bases: [].concat(meiosisA[1].concat(meiosisB[1])) }),
+    ]
   }
 
   toArray() {

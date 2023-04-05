@@ -1,4 +1,5 @@
 export * from './concerns/index.js'
+export * from './mating/index.js'
 export * from './mixins/index.js'
 export * from './vertices/index.js'
 

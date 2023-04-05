@@ -33,11 +33,11 @@ export class Individual {
 
     this.brain = new Brain({
       genome: this.genome,
-      sensors,
-      actions,
       neuronsCount,
       graphOptions,
-      verticesParams,
+      sensors: sensors.map(s => ({ bindTo: this, ...s })),
+      actions: actions.map(a => ({ bindTo: this, ...a })),
+      verticesParams: { ...verticesParams, individual: this },
     })
 
   }
