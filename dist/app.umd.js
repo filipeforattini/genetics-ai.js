@@ -652,6 +652,8 @@
       fitnessFunction = function (individual) { individual.health; },
       matingStrategy = [Pool],
     }) {
+      this.iteration = 0;
+
       this.size = size;
       this.individualInterface = individualInterface;
       this.individualOptions = individualOptions;
@@ -737,10 +739,6 @@
         }));
 
       this.individuals = this.individuals.concat(individualsPack);
-
-      this.demographics.random += individualsPack.length;
-      this.demographics.total += individualsPack.length;
-
       this.fitness = new Array(this.individuals.length).fill(-1);
     }
 
@@ -757,16 +755,16 @@
         const strategy = new StrategyInterface(this);
         gen = strategy.run();
       }
-      
-      gen.demographics = {
-        children: gen.individuals.length,
-      };
+
+      gen.iteration = this.iteration + 1;    
+      const children = gen.individuals.length;
 
       gen.fill();
       
       gen.demographics = {
+        children,
         total: gen.individuals.length,
-        random: gen.individuals.length - gen.demographics.children,
+        random: gen.individuals.length - children,
       };
 
       return gen
