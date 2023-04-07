@@ -114,8 +114,18 @@ export class Generation {
       const strategy = new StrategyInterface(this)
       gen = strategy.run()
     }
+    
+    gen.demographics = {
+      children: gen.individuals.length,
+    }
 
     gen.fill()
+    
+    gen.demographics = {
+      total: gen.individuals.length,
+      random: gen.individuals.length - gen.demographics.children,
+    }
+
     return gen
   }
 

@@ -111,11 +111,11 @@ describe('brain tick', () => {
     })
   })
 
-  test('over complicated looper from 0 to 3', () => {
-    for (let i = 0; i < 11; i++) {
+  test('over complicated looper from 0 to 10', () => {
+    for (let i = 0; i < 10; i++) {
       brain.run()      
-    }
+  }
 
-    expect(acc.get()).toEqual(3)
+    expect(acc.get()).toEqual(10)
   })
 })
