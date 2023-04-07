@@ -148,7 +148,6 @@ class Genome {
       .concat(bases);
 
     this.nodes = this.getNodes();
-    this.size = this.bases.length;
     this.length = this.bases.length;
   }
 
@@ -222,7 +221,7 @@ class Genome {
   }
 
   static sexualReproduction(genA, genB) {
-    const middle = Math.floor(genA.size / 2);
+    const middle = Math.floor(genA.length / 2);
 
     const meiosisA = [
       genA.bases.slice(0, middle).map(b => new Base({ ...b })),
@@ -530,7 +529,7 @@ class Brain {
       const weightTotal = edges.map(e => e.weight).reduce((acc, x) => acc + x, 0);
       let values = edges.map(e => ({ ...e, value: ticks[e.extremities[0]] * e.weight }));
 
-      ticks[next.id] = (values.reduce((acc, k) => acc + k.value, 0) / weightTotal);
+      ticks[next.id] = Math.tanh(values.reduce((acc, k) => acc + k.value, 0) / weightTotal);
 
       let nextTargets = thisEdges
         .filter(e => e.extremities[0] === next.id)
@@ -550,7 +549,7 @@ class Brain {
 
       const weightTotal = sources.map(e => e.weight).reduce((acc, x) => acc + x, 0) || 1;
 
-      ticks[action.id] = (sources.reduce((acc, e) => acc + ticks[e.id] * e.weight, 0) / weightTotal);
+      ticks[action.id] = Math.tanh(sources.reduce((acc, e) => acc + ticks[e.id] * e.weight, 0) / weightTotal);
     }
 
     this.ticks.push(ticks);
@@ -752,8 +751,18 @@ class Generation {
       const strategy = new StrategyInterface(this);
       gen = strategy.run();
     }
+    
+    gen.demographics = {
+      children: gen.individuals.length,
+    };
 
     gen.fill();
+    
+    gen.demographics = {
+      total: gen.individuals.length,
+      random: gen.individuals.length - gen.demographics.children,
+    };
+
     return gen
   }
 
