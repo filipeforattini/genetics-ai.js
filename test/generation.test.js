@@ -6,8 +6,8 @@ const sensors = [
 ]
 
 const actions = [
-  { id: 'a#00', tick(data) { console.log('a#00', data) }},
-  { id: 'a#01', tick(data) { console.log('a#01', data) }},
+  { id: 'a#00', tick(data) { console.log('a#00', data) } },
+  { id: 'a#01', tick(data) { console.log('a#01', data) } },
 ]
 
 const GEN_SIZE = 30
@@ -52,9 +52,39 @@ describe('generation creation', () => {
   })
 })
 
+describe('demographics', () => {
+  test.only('total', () => {
+    let gen = Generation.first({
+      size: 1000,
+      fitnessFunction: (ind) => 1,
+      individualOptions: {
+        genomeSize: 4,
+        brain: {
+          sensors,
+          actions,
+          neuronsCount: 2,
+        }
+      }
+    })
+
+    expect(gen.demographics.total).toBeDefined()
+    expect(gen.demographics.random).toBeDefined()
+
+    gen = gen.next()
+    expect(gen.demographics.total).toBeDefined()
+    expect(gen.demographics.random).toBeDefined()
+    expect(gen.demographics.children).toBeDefined()
+
+    gen = gen.next()
+    expect(gen.demographics.total).toBeDefined()
+    expect(gen.demographics.random).toBeDefined()
+    expect(gen.demographics.children).toBeDefined()
+  })
+})
+
 describe('evolution', () => {
   test('complete', () => {
-    
+
     const gen = Generation.first({
       size: GEN_SIZE,
       fitnessFunction: (ind) => ind.health - Math.random(),
@@ -71,7 +101,7 @@ describe('evolution', () => {
 
     expect(gen.individuals.length).toEqual(GEN_SIZE)
     expect(gen.fitness.length).toEqual(GEN_SIZE)
-    
+
     gen.fit()
     expect(gen.fitness.length).toEqual(GEN_SIZE)
 
