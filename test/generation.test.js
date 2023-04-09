@@ -31,6 +31,7 @@ describe('generation creation', () => {
     expect(gen.size).toEqual(GEN_SIZE)
     expect(gen.individuals.length).toEqual(GEN_SIZE)
     expect(gen.demographics.total).toEqual(GEN_SIZE)
+    expect(gen.demographics.random).toEqual(GEN_SIZE)
   })
 
   test('from static first', () => {
@@ -49,11 +50,12 @@ describe('generation creation', () => {
     expect(gen.size).toEqual(GEN_SIZE)
     expect(gen.individuals.length).toEqual(GEN_SIZE)
     expect(gen.demographics.total).toEqual(GEN_SIZE)
+    expect(gen.demographics.random).toEqual(GEN_SIZE)
   })
 })
 
 describe('demographics', () => {
-  test.only('total', () => {
+  test('total', () => {
     let gen = Generation.first({
       size: 1000,
       fitnessFunction: (ind) => 1,
@@ -73,12 +75,16 @@ describe('demographics', () => {
     gen = gen.next()
     expect(gen.demographics.total).toBeDefined()
     expect(gen.demographics.random).toBeDefined()
+    expect(gen.demographics.random > 0).toBeTruthy()
     expect(gen.demographics.children).toBeDefined()
+    expect(gen.demographics.children > 0).toBeTruthy()
 
     gen = gen.next()
     expect(gen.demographics.total).toBeDefined()
     expect(gen.demographics.random).toBeDefined()
+    expect(gen.demographics.random > 0).toBeTruthy()
     expect(gen.demographics.children).toBeDefined()
+    expect(gen.demographics.children > 0).toBeTruthy()
   })
 })
 

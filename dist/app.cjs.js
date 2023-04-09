@@ -677,40 +677,6 @@ class Generation {
     });
 
     gen.fill();
-    gen.demographics.total = gen.individuals.length;
-    gen.demographics.random = gen.individuals.length;
-
-    return gen
-  }
-
-  static from(generation, options = {}, generationOptions = {}) {
-    Object.assign(generationOptions, generation.options);
-
-    const {
-      justAlive = true,
-      topPerformers = 0.15,
-      childrenPerIndividual = 4,
-    } = options;
-
-    const gen = new Generation(generationOptions);
-
-    const winnersCount = Math.floor(topPerformers * generation.individuals.length);
-
-    let winners = generation.individuals;
-    if (justAlive) winners = winners.filter(x => x.health > 0);
-    winners = winners.slice(0, winnersCount);
-
-    const children = winners.flatMap(g => g.children(childrenPerIndividual));
-
-    gen.individuals = children;
-    gen.fill();
-
-    gen.demographics = {
-      winners: winners.length,
-      children: children.length,
-      random: gen.individuals.length - children.length
-    };
-
     return gen
   }
 
@@ -736,6 +702,9 @@ class Generation {
 
     this.individuals = this.individuals.concat(individualsPack);
     this.fitness = new Array(this.individuals.length).fill(-1);
+
+    this.demographics.total += count;
+    this.demographics.random += count;
   }
 
   fit() {
@@ -754,15 +723,11 @@ class Generation {
 
     gen.iteration = this.iteration + 1;    
     const children = gen.individuals.length;
-
-    gen.fill();
     
-    gen.demographics = {
-      children,
-      total: gen.individuals.length,
-      random: gen.individuals.length - children,
-    };
-
+    gen.demographics.children = children;
+    gen.demographics.total += children;
+    
+    gen.fill();
     return gen
   }
 
