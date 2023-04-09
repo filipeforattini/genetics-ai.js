@@ -55,8 +55,8 @@ export class Individual {
       genome: this.genome.toString(),
 
       brain: {
-        order: brain?.brainOrder || 0,
-        connections: brain?.brainConnections || 0,
+        order: brain.brainOrder || 0,
+        connections: brain.brainConnections || 0,
         nodes: this.genome.nodes.join(' '),
         edges: [].concat(brain.edges).map(k => k.key).join(' '),
         ticks: brain.ticks,
