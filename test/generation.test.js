@@ -10,7 +10,7 @@ const actions = [
   { id: 'a#01', tick(data) { console.log('a#01', data) } },
 ]
 
-const GEN_SIZE = 30
+const GEN_SIZE = 500
 
 describe('generation creation', () => {
   test('from class', () => {
@@ -89,7 +89,7 @@ describe('demographics', () => {
 })
 
 describe('evolution', () => {
-  test('complete', () => {
+  test('random', () => {
 
     const gen = Generation.first({
       size: GEN_SIZE,
@@ -112,6 +112,52 @@ describe('evolution', () => {
     expect(gen.fitness.length).toEqual(GEN_SIZE)
     expect(gen.best).toBeDefined()
 
+    gen.next()
+    expect(gen.individuals.length).toEqual(GEN_SIZE)
+  })
+
+  test('failure', () => {
+    const gen = Generation.first({
+      size: GEN_SIZE,
+      fitnessFunction: () => 0,
+
+      individualOptions: {
+        genomeSize: 4,
+        brain: {
+          sensors,
+          actions,
+          neuronsCount: 2,
+        }
+      },
+    })
+
+    expect(gen.individuals.length).toEqual(GEN_SIZE)
+    gen.next()
+    expect(gen.individuals.length).toEqual(GEN_SIZE)
+    gen.next()
+  })
+
+  test.only('success', () => {
+    const gen = Generation.first({
+      size: GEN_SIZE,
+      fitnessFunction: () => 1,
+
+      individualOptions: {
+        genomeSize: 4,
+        brain: {
+          sensors,
+          actions,
+          neuronsCount: 2,
+        }
+      },
+    })
+
+    gen.next()
+    expect(gen.individuals.length).toEqual(GEN_SIZE)
+    
+    gen.next()
+    expect(gen.individuals.length).toEqual(GEN_SIZE)
+    
     gen.next()
     expect(gen.individuals.length).toEqual(GEN_SIZE)
   })
