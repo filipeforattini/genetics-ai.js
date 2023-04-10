@@ -110,6 +110,7 @@ describe('evolution', () => {
 
     gen.fit()
     expect(gen.fitness.length).toEqual(GEN_SIZE)
+    expect(gen.best).toBeDefined()
 
     gen.next()
     expect(gen.individuals.length).toEqual(GEN_SIZE)

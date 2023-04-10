@@ -16,8 +16,10 @@ export class Generation {
     this.individualOptions = individualOptions
     this.fitnessFunction = fitnessFunction
     this.matingStrategies = matingStrategy
-
+    
+    this.best = null
     this.individuals = []
+    
     this.demographics = {
       total: 0,
       random: 0,
@@ -69,7 +71,16 @@ export class Generation {
   }
 
   fit() {
-    this.fitness = this.individuals.map(this.fitnessFunction)
+    this.fitness = this.individuals.map(ind => {
+      const fitness = this.fitnessFunction(ind)
+      ind.fitness = fitness
+      return fitness
+    });
+
+    this.individuals = this.individuals
+      .sort((a, b) => b.fitness - a.fitness)
+
+    this.best = this.individuals[0]
     return this.fitness
   }
 
