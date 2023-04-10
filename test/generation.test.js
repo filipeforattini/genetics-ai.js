@@ -137,7 +137,7 @@ describe('evolution', () => {
     gen.next()
   })
 
-  test.only('success', () => {
+  test('success', () => {
     const gen = Generation.first({
       size: GEN_SIZE,
       fitnessFunction: () => 1,
