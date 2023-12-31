@@ -139,7 +139,7 @@ export class Brain {
       return vertex
     }
 
-    if (metadata.bias) this.definitions[collection][id].metadata.bias += bias
+    if (metadata.bias) this.definitions[collection][id].metadata.bias += metadata.bias
     return this.definitions[collection][id]
   }
 
