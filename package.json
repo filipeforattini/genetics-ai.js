@@ -12,22 +12,19 @@
     "prepare": "husky install"
   },
   "devDependencies": {
-    "@rollup/plugin-commonjs": "^24.0.1",
-    "@rollup/plugin-node-resolve": "^15.0.1",
-    "asciichart": "^1.5.25",
-    "canvas": "^2.11.2",
-    "graphology": "^0.25.1",
-    "graphology-canvas": "^0.4.1",
-    "graphology-layout": "^0.6.1",
-    "graphology-layout-noverlap": "^0.4.2",
-    "jest": "^29.5.0",
-    "rollup": "^3.20.2",
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "husky": "^8.0.3",
+    "jest": "^29.7.0",
+    "rollup": "^4.9.1",
     "rollup-plugin-filesize": "^10.0.0",
     "rollup-plugin-minify": "^1.0.3",
     "rollup-plugin-node-builtins": "^2.1.2",
     "rollup-plugin-node-globals": "^1.4.0",
     "rollup-plugin-node-polyfills": "^0.2.1",
-    "rollup-plugin-uglify": "^6.0.4",
-    "husky": "^8.0.0"
+    "rollup-plugin-uglify": "^6.0.4"
+  },
+  "dependencies": {
+    "lodash-es": "^4.17.21"
   }
 }

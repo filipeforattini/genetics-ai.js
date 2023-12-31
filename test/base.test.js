@@ -1,54 +1,125 @@
 import { Base } from "../src/base.class.js"
 
-describe('base creation', () => {
-  test('from class', () => {
-    const base = new Base({
-      from: 's#01',
-      to: 'a#01',
-      weight: 1
+describe('bases parser', () => {
+  describe('config', () => {
+    test('get bias from char', () => {
+      const bases = [
+        '1', '3', '5', '10', '30', '50',
+        'B', 'D', 'F', 'B0', 'D0', 'F0',
+      ]
+
+      for (const base of bases) {
+        const baseFound = Base.getConfig(base)
+        expect(baseFound.type).toEqual('bias')
+      }
     })
 
-    expect(base.from).toEqual('s#01')
-    expect(base.to).toEqual('a#01')
-    expect(base.weight).toEqual(1)
+    test('get connection from char', () => {
+      const bases = [
+        '0', '2', '4', '00', '20', '40',
+        'A', 'C', 'E', 'A0', 'C0', 'E0',
+      ]
+
+      for (const base of bases) {
+        const baseFound = Base.getConfig(base)
+        expect(baseFound.type).toEqual('connection')
+      }
+    })
   })
 
-  test('from static base32', () => {
-    const baseStr = '01g10a'
-    const base = Base.fromBase32(baseStr)
+  describe('bias', () => {
+    test('from string', () => {
+      const bases = [
+        '1', '10', '100', '1000', '10000',
+        'B', 'B0', 'B00', 'B000', 'B0000',
+        'V', 'V0', 'V00', 'V000', 'V0000',
+      ]
 
-    expect(base.from).toEqual('s#01')
-    expect(base.to).toEqual('a#01')
-    expect(base.weight).toEqual(1)
+      for (const base of bases) {
+        const baseFound = Base.fromString(base)
+        expect(baseFound.type).toEqual('bias')
+      }
+    })
 
-    expect(base.toString()).toEqual(baseStr)
-    expect(base.toBase32()).toEqual(baseStr)
+    test('from string content', () => {
+      const base = Base.fromString('D02')
+
+      expect(base.type).toEqual('bias')
+      expect(base.data).toEqual(3)
+      expect(base.target.id).toEqual(0)
+      expect(base.target.type).toEqual('action')
+    })
+
+    test('max value', () => {
+      const base = Base.fromString('VVS')
+      expect(base.type).toEqual('bias')
+      expect(base.data).toEqual(-7)
+      expect(base.target.id).toEqual(255)
+      expect(base.target.type).toEqual('sensor')
+    })
   })
 
-  test('from static bin', () => {
-    const baseStr = '000000000110000000010000001010'
-    const base = Base.fromBin(baseStr)
+  describe('connection', () => {
+    test('from string', () => {
+      const bases = [
+        '0', '00', '000', '0000', '00000',
+        'A', 'A0', 'A00', 'A000', 'A0000',
+        'U', 'U0', 'U00', 'U000', 'U0000',
+      ]
 
-    expect(base.from).toEqual('s#01')
-    expect(base.to).toEqual('a#01')
-    expect(base.weight).toEqual(1)
+      for (const base of bases) {
+        const baseFound = Base.fromString(base)
+        expect(baseFound.type).toEqual('connection')
+      }
+    })
 
-    expect(base.toBin()).toEqual(baseStr)
+    test('from string content', () => {
+      const base = Base.fromString('C0101')
+
+      expect(base.type).toEqual('connection')
+      expect(base.data).toEqual(6)
+    })
+
+  })
+})
+
+describe('bases zip', () => {
+  test('bias base to string', () => {
+    const baseStr = '90C'
+    const baseObj = {
+      type: 'bias',
+      data: 2,
+      target: { type: 'sensor', id: 3 },
+    }
+
+    const newBaseStr = Base.toString(baseObj)
+    expect(newBaseStr).toEqual(baseStr)
+
+    const newBaseObj = Base.fromString(newBaseStr)
+    expect(newBaseObj.type).toEqual(baseObj.type)
+    expect(newBaseObj.data).toEqual(baseObj.data)
+    expect(newBaseObj.target.type).toEqual(baseObj.target.type)
+    expect(newBaseObj.target.id).toEqual(baseObj.target.id)
   })
 
-  test('from static random', () => {
-    const base = Base.random()
-    expect(base.from).toBeDefined()
-    expect(base.to).toBeDefined()
-    expect(base.weight).toBeDefined()
+  test('connection base to string', () => {
+    const baseStr = '40709'
+    const baseObj = {
+      type: 'connection',
+      data: 2,
+      source: { type: 'neuron', id: 3 },
+      target: { type: 'action', id: 4 },
+    }
 
-    const base1 = Base.random({ from: 's#00' })
-    expect(base1.from).toEqual('s#00')
+    const newBaseStr = Base.toString(baseObj)
+    expect(newBaseStr).toEqual(baseStr)
 
-    const base2 = Base.random({ to: 'a#00' })
-    expect(base2.to).toEqual('a#00')
-
-    const base3 = Base.random({ weight: 1 })
-    expect(base3.weight).toEqual(1)
+    const newBaseObj = Base.fromString(newBaseStr)
+    expect(newBaseObj.type).toEqual(baseObj.type)
+    expect(newBaseObj.data).toEqual(baseObj.data)
+    expect(newBaseObj.source.type).toEqual(baseObj.source.type)
+    expect(newBaseObj.source.id).toEqual(baseObj.source.id)
+    expect(newBaseObj.target.type).toEqual(baseObj.target.type)
+    expect(newBaseObj.target.id).toEqual(baseObj.target.id)
   })
 })

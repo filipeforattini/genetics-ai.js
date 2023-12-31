@@ -1,205 +1,199 @@
-import Graph from "graphology"
+import { isString, sortBy } from "lodash-es"
 
 import { Genome } from "./genome.class.js"
-import { toBase32 } from "./concerns/index.js";
-import { ResourcefulMixin } from "./mixins/index.js"
-import { Neuron, Action, Sensor } from "./vertices/index.js"
+import { Vertex } from "./vertex.class.js"
+
+function sigmoid(x = 0) {
+  return 1 / (1 + Math.exp(x * -1));
+}
 
 export class Brain {
   constructor({
-    id,
     genome,
     sensors = [],
     actions = [],
-    neuronsCount = 0,
-    graphOptions = {},
-    verticesParams = {},
+    environment = {},
   }) {
-    Object.assign(this, ResourcefulMixin)
+    this.environment = environment
+    this.genome = Genome.from(genome)
 
-    this.id = id || this.createId('b#', 4)
+    this.definitions = {
+      all: {},
+      actions: {},
+      neurons: {},
+      sensors: {},
+    }
 
-    this.ticks = []
-    this.genome = genome
-    this.sensors = sensors
-    this.actions = actions
-    this.neuronsCount = neuronsCount
-    this.graphOptions = graphOptions
-    this.verticesParams = verticesParams
+    this.sensors = sensors.reduce((acc, sensor, i) => {
+      if (!sensor.name) sensor.name = `s#${sensor.id || i}`
+      acc[sensor.name] = sensor
+      return acc
+    }, {})
 
+    this.actions = actions.reduce((acc, action, i) => {
+      if (!action.name) action.name = `a#${action.id || i}`
+      acc[action.name] = action
+      return acc
+    }, {})
+
+    this.tickOrder = []
     this.setup()
   }
 
   setup() {
-    const verticesParams = {
-      brain: this,
-      ...this.verticesParams,
+    for (const base of this.genome.bases) {
+      if (base.type === 'bias') this.setupBias(base)
+      else if (base.type === 'connection') this.setupConnection(base)
     }
 
-    this.sensors = this.sensors
-      .map(s => ({ ...s, params: verticesParams }))
-      .map(s => new Sensor(s))
+    this.tickOrder = this.defineTickOrder()
 
-    this.actions = this.actions
-      .map(s => ({ ...s, params: verticesParams }))
-      .map(a => new Action(a))
-
-    this.neurons = new Array(this.neuronsCount).fill(0)
-      .map((_, i) => new Neuron({ id: `n#${toBase32(i).padStart(2, '0')}` }))
-
-    const nodes = [... new Set([]
-      .concat(this.sensors || [])
-      .concat(this.neurons || [])
-      .concat(this.actions || [])
-      .map(s => s.id))
-    ]
-
-    this.graph = new Graph({
-      multi: true,
-      allowSelfLoops: false,
-      ...this.graphOptions,
-    });
-
-    this.graph.import({
-      attributes: { name: this.id },
-      nodes: nodes.map(n => ({ key: n })),
-    })
-
-    const bases = this.genome.bases.filter(b => nodes.includes(b.from) && nodes.includes(b.to))
-
-    for (const base of bases) {
-      if (base.from !== base.to) {
-        if (!this.graph.hasEdge(base.from, base.to)) {
-          this.graph.addEdgeWithKey(
-            `${base.from}>>${base.to}`,
-            base.from,
-            base.to,
-            { weight: base.weight }
-          )
-        }
-      }
-    }
-  }
-
-  static random({ genome, genomeSize = 1, neuronsCount = 0, sensors = [], actions = [] } = {}) {
-    let gen = genome || Genome.random(genomeSize)
-
-    return new Brain({
-      sensors,
-      actions,
-      genome: gen,
-      neuronsCount,
-    })
-  }
-
-  toJSON() {
-    return {
-      genome: this.genome.toArray(),
-      brainOrder: this.graph.order,
-      brainConnections: this.graph.size,
-      ...this.graph.export(),
-      ticks: this.ticks,
-    }
-  }
-
-  getObject(id) {
-    return id.startsWith('s#')
-      ? this.sensors.find(s => s.id === id)
-      : id.startsWith('a#')
-        ? this.actions.find(a => a.id === id)
-        : id.startsWith('#n')
-          ? this.neurons.find(n => n.id === id)
-          : null
-  }
-
-  getObjects(idList = []) {
-    return idList
-      .map(id => this.getObject(id))
-      .filter(n => n)
-  }
-
-  tick() {
-    const ticks = [... new Set([]
-      .concat(this.sensors || [])
-      .concat(this.neurons || [])
-      .concat(this.actions || [])
-      .map(s => s.id))
-    ].reduce((acc, n) => {
-      acc[n] = 0
-      return acc
-    }, {})
-
-    // calculate sensors
-    this.sensors.forEach(x => { ticks[x.id] = x.tick() })
-
-    // calculate neurons
-    let neurons = this.sensors.map(s => this.graph.neighbors(s.id))
-      .flatMap(x => x)
-      .filter(n => n.startsWith('n#'))
-      .map(id => this.neurons.find(n => n.id === id))
-
-    while (neurons.length > 0) {
-      let next = neurons.shift()
-
-      const thisEdges = this.graph.edges(next.id)
-        .map(e => ({ name: e, extremities: this.graph.extremities(e) }))
-
-      const neuronsReq = thisEdges
-        .filter(e => e.extremities[1] === next.id)
-        .filter(e => e.extremities[0] !== next.id)
-
-      const deps = neuronsReq.filter(n => !ticks.hasOwnProperty(n.extremities[0])).length
-
-      if (deps > 0) {
-        neurons = neurons
-          .concat(neuronsReq.map(e => this.neurons.find(n => e === n.extremities[0])))
-          .concat(next)
-
+    for (const vertex of Object.values(this.definitions.sensors)) {
+      if (!this.sensors[vertex.name]) {
+        vertex.tick = () => 0
         continue
       }
 
-      let edges = neuronsReq.map(e => ({ ...e, ...this.graph.getEdgeAttributes(e.name) }))
-      const weightTotal = edges.map(e => e.weight).reduce((acc, x) => acc + x, 0)
-      let values = edges.map(e => ({ ...e, value: ticks[e.extremities[0]] * e.weight }))
+      let fn = this.sensors[vertex.name].tick || (() => 0)
+      fn = fn.bind(this)
 
-      ticks[next.id] = Math.tanh(values.reduce((acc, k) => acc + k.value, 0) / weightTotal)
-
-      let nextTargets = thisEdges
-        .filter(e => e.extremities[0] === next.id)
-        .filter(n => n.extremities[1].startsWith('n#'))
-        .map(e => this.neurons.find(n => n.id === e.extremities[1]))
-        .filter(e => !ticks.hasOwnProperty(e.id))
-
-      neurons = neurons.concat(nextTargets)
+      vertex.tick = () => {
+        const result = fn(this.environment)
+        vertex.metadata.current = result
+      }
     }
 
-    // calculate actions
-    for (const action of this.actions) {
-      let sources = this.graph.edges(action.id)
-        .filter(x => x)
-        .map(e => ({ name: e, id: this.graph.extremities(e)[0] }))
-        .map(e => ({ ...e, ...this.graph.getEdgeAttributes(e.name) }))
+    for (const vertex of Object.values(this.definitions.neurons)) {
+      vertex.tick = function () {
+        let input = vertex.calculateInput()
+        input += parseFloat(this.metadata.bias || 0)
 
-      const weightTotal = sources.map(e => e.weight).reduce((acc, x) => acc + x, 0) || 1
+        let result = sigmoid(input) 
+        vertex.metadata.current = result
 
-      ticks[action.id] = Math.tanh(sources.reduce((acc, e) => acc + ticks[e.id] * e.weight, 0) / weightTotal)
+        return result
+      }
     }
 
-    this.ticks.push(ticks)
+    for (const vertex of Object.values(this.definitions.actions)) {
+      if (!this.actions[vertex.name]) {
+        vertex.tick = () => 0
+        continue
+      }
 
-    return Object.entries(ticks)
-      .filter(([k]) => k.startsWith('a#'))
-      .reduce((acc, [k, v]) => {
-        acc[k] = v
-        return acc
-      }, {})
+      let fn = this.actions[vertex.name].tick || (() => 0)
+      fn = fn.bind(this.environment.me || this)
+
+      vertex.tick = function (ticks = {}) {
+        let input = vertex.calculateInput(ticks)
+        input += parseFloat(this.metadata.bias || 0)
+        input = sigmoid(input)
+
+        const result = fn(input, this.environment)
+        vertex.metadata.current = result
+
+        return result
+      }
+    }
   }
 
-  run() {
-    const tick = this.tick()
+  setupBias({ target, data }) {
+    this.findOrCreateVertex({
+      id: target.id,
+      collection: target.type + 's',
+      metadata: {
+        bias: data,
+        type: target.type,
+      },
+    })
+  }
 
-    for (const action of this.actions) {
-      action.tick(tick[action.id])
+  setupConnection({ data, source, target }) {
+    const x = this.findOrCreateVertex({
+      id: source.id,
+      collection: source.type + 's',
+      metadata: { type: source.type },
+    })
+
+    const y = this.findOrCreateVertex({
+      id: target.id,
+      collection: target.type + 's',
+      metadata: { type: target.type },
+    })
+
+    y.addIn(x, data)
+    x.addOut(y, data)
+  }
+
+  findOrCreateVertex({ id, collection, metadata }) {
+    if (!this.definitions[collection][id]) {
+      const vertex = new Vertex(`${collection[0]}#${id}`, {
+        last: 0,
+        current: 0,
+        ...metadata,
+      })
+
+      this.definitions[collection][id] = vertex
+      this.definitions.all[vertex.name] = vertex
+
+      return vertex
     }
+
+    if (metadata.bias) this.definitions[collection][id].metadata.bias += bias
+    return this.definitions[collection][id]
+  }
+
+  defineTickOrder() {
+    let tickList = []
+
+    const usableActions = Object
+      .values(this.definitions.actions)
+      .filter(action => action.in.length > 0)
+
+    for (const action of usableActions) {
+      tickList = tickList.concat(action.inputsTree())
+      tickList = sortBy(tickList, ['deph']).reverse()
+    }
+
+    return tickList
+  }
+
+  tick() {
+    const ticked = {}
+
+    let types = {
+      sensor: [],
+      neuron: [],
+      action: [],
+    }
+
+    for (const { vertex } of this.tickOrder) {
+      types[vertex.metadata.type].push(vertex)
+    }
+
+    for (const vertex of types.sensor) {
+      if (ticked[vertex.name]) continue
+      ticked[vertex.name] = vertex.tick()
+    }
+
+    for (const vertex of types.neuron) {
+      if (ticked[vertex.name]) continue
+      ticked[vertex.name] = vertex.tick()
+    }
+
+    let actionsInputs = []
+    for (const vertex of types.action) {
+      if (ticked[vertex.name]) continue
+      
+      actionsInputs.push({
+        input: vertex.calculateInput(),
+        vertex,
+      })
+    }
+
+    const finalAction = sortBy(actionsInputs, ['input']).pop().vertex
+    ticked[finalAction.name] = finalAction.tick()
+
+    return ticked
   }
 }
