@@ -4566,7 +4566,7 @@
         }
 
         let fn = this.sensors[vertex.name].tick || (() => 0);
-        fn = fn.bind(this);
+        fn = fn.bind(this.environment.me || this);
 
         vertex.tick = () => {
           const result = fn(this.environment);
