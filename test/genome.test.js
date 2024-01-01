@@ -33,10 +33,18 @@ describe('genome', () => {
     expect(genome.bases.length).toEqual(count)
   })
 
-  test('random generated', () => {
+  test('evaluate random generated bases', () => {
     for (const [count, genome] of genomes) {
       const g = Genome.from(genome)
       expect(g.bases.length).toEqual(count)
     }
+  })
+
+  test('evaluate random generated bases', () => {
+    const g = Genome.randomWith(10, {
+      neurons: 5,
+      sensors: 100,
+      actions: 4,
+    })
   })
 })
