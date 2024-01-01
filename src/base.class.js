@@ -170,4 +170,74 @@ export class Base {
   static randomString() {
     return this.toString(this.random())
   }
+
+  static randomWith({
+    neurons = 1,
+    sensors = 1,
+    actions = 1,
+  } = {}) {
+    // bias base
+    if (random(0, 10) < 4) {
+      const data = random(-4, 4)
+
+      if (random(0, 100) < 33) {
+        return {
+          type: 'bias',
+          data,
+          target: {
+            type: 'sensor',
+            id: random(0, sensors - 1),
+          },
+        }
+      } else if (random(0, 100) < 50) {
+        return {
+          type: 'bias',
+          data,
+          target: {
+            type: 'neuron',
+            id: random(0, neurons - 1),
+          },
+        }
+      } else {
+        return {
+          type: 'bias',
+          data,
+          target: {
+            type: 'sensor',
+            id: random(0, actions - 1),
+          },
+        }
+      }
+    }
+
+    const data = random(0, 4)
+
+    if (random(0, 100) < 50) {
+      return {
+        type: 'connection',
+        data,
+        source: {
+          type: 'sensor',
+          id: random(0, sensors - 1),
+        },
+        target: {
+          type: 'neuron',
+          id: random(0, neurons - 1),
+        },
+      }
+    } else {
+      return {
+        type: 'connection',
+        data,
+        source: {
+          type: 'neuron',
+          id: random(0, neurons - 1),
+        },
+        target: {
+          type: 'action',
+          id: random(0, actions - 1),
+        },
+      }
+    }
+  }
 }

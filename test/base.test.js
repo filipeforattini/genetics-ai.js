@@ -122,4 +122,20 @@ describe('bases zip', () => {
     expect(newBaseObj.target.type).toEqual(baseObj.target.type)
     expect(newBaseObj.target.id).toEqual(baseObj.target.id)
   })
+
+  test('random with restrictions', () => {
+    const base = Base.randomWith({
+      neurons: 1,
+      sensors: 1,
+      actions: 1,
+    })
+
+    expect(base.target.id).toEqual(0)
+
+    const base2 = Base.randomWith({
+      neurons: 20,
+      sensors: 20,
+      actions: 20,
+    })
+  })
 })

@@ -53,7 +53,28 @@ export class Genome {
   }
 
   static random(count = 1) {
-    const bases = new Array(count).fill(null).map(() => Base.random())
+    const bases = new Array(count)
+      .fill(null)
+      .map(() => Base.random())
+
+    return { 
+      bases,
+      encoded: bases.map(base => Base.toString(base)).join(''),
+    }
+  }
+
+  static randomWith(count = 1, { 
+    neurons = 1,
+    sensors = 1, 
+    actions = 1, 
+  } = {}) {
+    const bases = new Array(count)
+      .fill(null)
+      .map(() => Base.randomWith({
+        neurons,
+        sensors,
+        actions,
+      }))
 
     return { 
       bases,
