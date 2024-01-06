@@ -4174,36 +4174,11 @@ var sortBy = baseRest(function(collection, iteratees) {
 
 var sortBy$1 = sortBy;
 
-const toBin = x => parseInt(x).toString(2);
 const fromBin = bin => parseInt(bin, 2);
 const fromBinToBase32 = bin => parseInt(bin, 2).toString(32);
 
-const toBase32 = x => parseInt(x).toString(32);
 const fromBase32 = b32 => parseInt(b32, 32);
 const fromBase32ToBin = b32 => parseInt(b32, 32).toString(2);
-
-const chars = [
-  'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
-  'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't',
-  'u', 'v', 'w', 'x', 'y', 'z'
-].join('');
-
-const vowels = ['a', 'e', 'i', 'o', 'u'].join('');
-
-const alphanum = [
-  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-  ...chars.split(''),
-].join('');
-
-const randomChar = (size = 1) => {
-  const str = new Array(size).fill(0).map(() => chars[randomInt(0, chars.length)]);
-  return shuffleStr(str).join('')
-};
-
-const randomAlpha = (size = 1, base = alphanum.length) => {
-  const str = new Array(size).fill(0).map(() => alphanum[randomInt(0, base)]);
-  return shuffleStr(str).join('')
-};
 
 class Base {
   static charToBin(char) {
@@ -4836,4 +4811,4 @@ class Individual {
   }
 }
 
-export { Base, Brain, Genome, Individual, Reproduction, Vertex, alphanum, chars, fromBase32, fromBase32ToBin, fromBin, fromBinToBase32, randomAlpha, randomChar, toBase32, toBin, vowels };
+export { Base, Brain, Genome, Individual, Reproduction, Vertex, fromBase32, fromBase32ToBin, fromBin, fromBinToBase32 };
