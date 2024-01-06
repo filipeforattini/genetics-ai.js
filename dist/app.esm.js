@@ -4679,7 +4679,11 @@ var Individual = /*#__PURE__*/function () {
       _ref7$actions = _ref7.actions,
       actions = _ref7$actions === void 0 ? [] : _ref7$actions,
       _ref7$environment = _ref7.environment,
-      environment = _ref7$environment === void 0 ? {} : _ref7$environment;
+      environment = _ref7$environment === void 0 ? {} : _ref7$environment,
+      _ref7$childrenClass = _ref7.childrenClass,
+      childrenClass = _ref7$childrenClass === void 0 ? Individual : _ref7$childrenClass,
+      _ref7$extraParams = _ref7.extraParams,
+      extraParams = _ref7$extraParams === void 0 ? {} : _ref7$extraParams;
     _classCallCheck(this, Individual);
     this.genome = Genome.from(genome);
     var env = merge({
@@ -4695,12 +4699,12 @@ var Individual = /*#__PURE__*/function () {
       asexual: {
         fission: function fission() {
           var mutationRate = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 1 / 1000;
-          return new Individual({
+          return new childrenClass(_objectSpread({
             sensors: sensors,
             actions: actions,
             environment: env,
             genome: Reproduction.genomeMutate(_this3.genome, mutationRate)
-          });
+          }, extraParams));
         }
       }
     };
