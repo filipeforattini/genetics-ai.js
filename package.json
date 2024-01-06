@@ -1,6 +1,6 @@
 {
   "name": "genetics-ai.js",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "A Genetic Algorithm AI lib for JS",
   "main": "./dist/app.esm.js",
   "author": "filipeforattini",
