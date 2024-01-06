@@ -4497,30 +4497,14 @@ class Genome {
   }
 }
 
-function weightedAverage(values, weights) {
-  if (values.length !== weights.length) {
-    throw new Error('Values and weights arrays must be of the same length');
-  }
-
-  let sum = 0;
-  let weightSum = 0;
-
-  for (let i = 0; i < values.length; i++) {
-    sum += values[i] * weights[i];
-    weightSum += weights[i];
-  }
-
-  return sum / weightSum;
+function dotProduct(a, b) {
+  return a.reduce((acc, v, i) => acc + v * b[i], 0)
 }
 
 class Vertex {
   constructor(name, metadata = {}) {
     this.name = name;
-
-    this.metadata = {
-      current: 0,
-      ...metadata,
-    };
+    this.metadata = { ...metadata };
 
     this.in = [];
     this.inMap = {};
@@ -4573,10 +4557,10 @@ class Vertex {
 
   inputsTree(deph = 0, visited = {}) {
     if (visited[this.name]) return []
-    
+
     let pile = [];
     visited[this.name] = pile.push({ deph, vertex: this });
-    
+
     for (const input of this.in) {
       let subPile = input.vertex.inputsTree(deph + 1, visited);
 
@@ -4587,20 +4571,24 @@ class Vertex {
     return sortBy$1(pile, ['deph'])
   }
 
-  calculateInput () {
+  calculateInput() {
     let values = [], weights = [];
 
     for (const { vertex, weight } of this.in) {
-      values.push(vertex.metadata.current || 0);
+      values.push(vertex.metadata.lastTick || 0);
       weights.push(weight);
     }
 
-    return weightedAverage(values, weights)
+    return dotProduct(values, weights)
   }
 }
 
 function sigmoid(x = 0) {
   return 1 / (1 + Math.exp(x * -1));
+}
+
+function relu(x = 0) {
+  return Math.max(0, x);
 }
 
 class Brain {
@@ -4609,9 +4597,14 @@ class Brain {
     sensors = [],
     actions = [],
     environment = {},
+    activationFunction = 'relu',
   }) {
     this.environment = environment;
     this.genome = Genome.from(genome);
+
+    this.activationFunction = activationFunction === 'sigmoid'
+      ? sigmoid
+      : relu;
 
     this.definitions = {
       all: {},
@@ -4644,50 +4637,38 @@ class Brain {
 
     this.tickOrder = this.defineTickOrder();
 
+    const env = this.environment;
+    const activationFunction = this.activationFunction;
+
     for (const vertex of Object.values(this.definitions.sensors)) {
-      if (!this.sensors[vertex.name]) {
-        vertex.tick = () => 0;
-        continue
-      }
-
       let fn = this.sensors[vertex.name].tick || (() => 0);
-      fn = fn.bind(this.environment.me || this);
+      fn = fn.bind(env.me || this);
 
-      vertex.tick = () => {
-        const result = fn(this.environment);
-        vertex.metadata.current = result;
+      vertex.tick = function () {
+        const result = fn(env) + (this.metadata.bias || 0);
+        this.metadata.lastTick = result;
+        return result
       };
     }
 
     for (const vertex of Object.values(this.definitions.neurons)) {
       vertex.tick = function () {
-        let input = vertex.calculateInput();
-        input += parseFloat(this.metadata.bias || 0);
-
-        let result = sigmoid(input); 
-        vertex.metadata.current = result;
-
+        let input = this.calculateInput();
+        let result = activationFunction(input + (this.metadata.bias || 0));
+        this.metadata.lastTick = result;
         return result
       };
     }
 
     for (const vertex of Object.values(this.definitions.actions)) {
-      if (!this.actions[vertex.name]) {
-        vertex.tick = () => 0;
-        continue
-      }
-
       let fn = this.actions[vertex.name].tick || (() => 0);
-      fn = fn.bind(this.environment.me || this);
+      fn = fn.bind(env.me || this);
 
-      vertex.tick = function (ticks = {}) {
-        let input = vertex.calculateInput(ticks);
-        input += parseFloat(this.metadata.bias || 0);
-        input = sigmoid(input);
-
-        const result = fn(input, this.environment);
-        vertex.metadata.current = result;
-
+      vertex.tick = function () {
+        let input = this.calculateInput();
+        input = activationFunction(input + (this.metadata.bias || 0));
+        const result = fn(input, env);
+        this.metadata.lastTick = result;
         return result
       };
     }
@@ -4698,7 +4679,7 @@ class Brain {
       id: target.id,
       collection: target.type + 's',
       metadata: {
-        bias: data,
+        bias: data || 0,
         type: target.type,
       },
     });
@@ -4708,13 +4689,17 @@ class Brain {
     const x = this.findOrCreateVertex({
       id: source.id,
       collection: source.type + 's',
-      metadata: { type: source.type },
+      metadata: {
+        type: source.type,
+      },
     });
 
     const y = this.findOrCreateVertex({
       id: target.id,
       collection: target.type + 's',
-      metadata: { type: target.type },
+      metadata: {
+        type: target.type
+      },
     });
 
     y.addIn(x, data);
@@ -4723,11 +4708,7 @@ class Brain {
 
   findOrCreateVertex({ id, collection, metadata }) {
     if (!this.definitions[collection][id]) {
-      const vertex = new Vertex(`${collection[0]}#${id}`, {
-        last: 0,
-        current: 0,
-        ...metadata,
-      });
+      const vertex = new Vertex(`${collection[0]}#${id}`, { bias: 0, ...metadata, id });
 
       this.definitions[collection][id] = vertex;
       this.definitions.all[vertex.name] = vertex;
@@ -4735,7 +4716,7 @@ class Brain {
       return vertex
     }
 
-    if (metadata.bias) this.definitions[collection][id].metadata.bias += metadata.bias;
+    this.definitions[collection][id].metadata.bias = this.definitions[collection][id].metadata.bias + (metadata.bias || 0);
     return this.definitions[collection][id]
   }
 
@@ -4763,6 +4744,7 @@ class Brain {
       action: [],
     };
 
+
     for (const { vertex } of this.tickOrder) {
       types[vertex.metadata.type].push(vertex);
     }
@@ -4780,7 +4762,7 @@ class Brain {
     let actionsInputs = [];
     for (const vertex of types.action) {
       if (ticked[vertex.name]) continue
-      
+
       actionsInputs.push({
         input: vertex.calculateInput(),
         vertex,
