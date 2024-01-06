@@ -1,29 +1,13 @@
 import { sortBy } from "lodash-es"
 
-function weightedAverage(values, weights) {
-  if (values.length !== weights.length) {
-    throw new Error('Values and weights arrays must be of the same length');
-  }
-
-  let sum = 0;
-  let weightSum = 0;
-
-  for (let i = 0; i < values.length; i++) {
-    sum += values[i] * weights[i];
-    weightSum += weights[i];
-  }
-
-  return sum / weightSum;
+function dotProduct(a, b) {
+  return a.reduce((acc, v, i) => acc + v * b[i], 0)
 }
 
 export class Vertex {
   constructor(name, metadata = {}) {
     this.name = name
-
-    this.metadata = {
-      current: 0,
-      ...metadata,
-    }
+    this.metadata = { ...metadata }
 
     this.in = []
     this.inMap = {}
@@ -76,10 +60,10 @@ export class Vertex {
 
   inputsTree(deph = 0, visited = {}) {
     if (visited[this.name]) return []
-    
+
     let pile = []
     visited[this.name] = pile.push({ deph, vertex: this })
-    
+
     for (const input of this.in) {
       let subPile = input.vertex.inputsTree(deph + 1, visited)
 
@@ -90,14 +74,14 @@ export class Vertex {
     return sortBy(pile, ['deph'])
   }
 
-  calculateInput () {
+  calculateInput() {
     let values = [], weights = []
 
     for (const { vertex, weight } of this.in) {
-      values.push(vertex.metadata.current || 0)
+      values.push(vertex.metadata.lastTick || 0)
       weights.push(weight)
     }
 
-    return weightedAverage(values, weights)
+    return dotProduct(values, weights)
   }
 }
