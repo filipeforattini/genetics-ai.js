@@ -1,5 +1,5 @@
 import minify from 'rollup-plugin-minify'
-import { babel } from '@rollup/plugin-babel';
+import { babel, getBabelOutputPlugin } from '@rollup/plugin-babel';
 import { uglify } from "rollup-plugin-uglify";
 import filesize from "rollup-plugin-filesize";
 import commonjs from '@rollup/plugin-commonjs';
@@ -22,7 +22,12 @@ export default [
       builtins(),
       nodePolyfills(),
       commonjs(),
-      babel({ babelHelpers: 'bundled' }),
+      babel({ 
+        babelHelpers: 'bundled' 
+      }),
+      getBabelOutputPlugin({
+        presets: ['@babel/preset-env']
+      }),
       nodeResolve({
         main: true,
         jsnext: true,
@@ -50,7 +55,12 @@ export default [
       builtins(),
       nodePolyfills(),
       commonjs(),
-      babel({ babelHelpers: 'bundled' }),
+      babel({ 
+        babelHelpers: 'bundled' 
+      }),
+      getBabelOutputPlugin({
+        presets: ['@babel/preset-env']
+      }),
       nodeResolve({
         main: true,
         jsnext: true,
@@ -76,7 +86,9 @@ export default [
       builtins(),
       nodePolyfills(),
       commonjs(),
-      babel({ babelHelpers: 'bundled' }),
+      babel({ 
+        babelHelpers: 'bundled' 
+      }),
       nodeResolve({
         main: true,
         jsnext: true,
@@ -102,7 +114,12 @@ export default [
       builtins(),
       nodePolyfills(),
       commonjs(),
-      babel({ babelHelpers: 'bundled' }),
+      babel({ 
+        babelHelpers: 'bundled' 
+      }),
+      getBabelOutputPlugin({
+        presets: ['@babel/preset-env']
+      }),
       nodeResolve({
         main: true,
         jsnext: true,

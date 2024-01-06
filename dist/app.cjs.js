@@ -1,20 +1,35 @@
 'use strict';
 
+function _createForOfIteratorHelper(o, allowArrayLike) { var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"]; if (!it) { if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") { if (it) o = it; var i = 0; var F = function F() {}; return { s: F, n: function n() { if (i >= o.length) return { done: true }; return { done: false, value: o[i++] }; }, e: function e(_e) { throw _e; }, f: F }; } throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); } var normalCompletion = true, didErr = false, err; return { s: function s() { it = it.call(o); }, n: function n() { var step = it.next(); normalCompletion = step.done; return step; }, e: function e(_e2) { didErr = true; err = _e2; }, f: function f() { try { if (!normalCompletion && it["return"] != null) it["return"](); } finally { if (didErr) throw err; } } }; }
+function ownKeys(e, r) { var t = Object.keys(e); if (Object.getOwnPropertySymbols) { var o = Object.getOwnPropertySymbols(e); r && (o = o.filter(function (r) { return Object.getOwnPropertyDescriptor(e, r).enumerable; })), t.push.apply(t, o); } return t; }
+function _objectSpread(e) { for (var r = 1; r < arguments.length; r++) { var t = null != arguments[r] ? arguments[r] : {}; r % 2 ? ownKeys(Object(t), !0).forEach(function (r) { _defineProperty(e, r, t[r]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function (r) { Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r)); }); } return e; }
+function _defineProperty(obj, key, value) { key = _toPropertyKey(key); if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
+function _slicedToArray(arr, i) { return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest(); }
+function _nonIterableRest() { throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
+function _unsupportedIterableToArray(o, minLen) { if (!o) return; if (typeof o === "string") return _arrayLikeToArray(o, minLen); var n = Object.prototype.toString.call(o).slice(8, -1); if (n === "Object" && o.constructor) n = o.constructor.name; if (n === "Map" || n === "Set") return Array.from(o); if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen); }
+function _arrayLikeToArray(arr, len) { if (len == null || len > arr.length) len = arr.length; for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i]; return arr2; }
+function _iterableToArrayLimit(r, l) { var t = null == r ? null : "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"]; if (null != t) { var e, n, i, u, a = [], f = !0, o = !1; try { if (i = (t = t.call(r)).next, 0 === l) { if (Object(t) !== t) return; f = !1; } else for (; !(f = (e = i.call(t)).done) && (a.push(e.value), a.length !== l); f = !0); } catch (r) { o = !0, n = r; } finally { try { if (!f && null != t["return"] && (u = t["return"](), Object(u) !== u)) return; } finally { if (o) throw n; } } return a; } }
+function _arrayWithHoles(arr) { if (Array.isArray(arr)) return arr; }
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+function _defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, _toPropertyKey(descriptor.key), descriptor); } }
+function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); Object.defineProperty(Constructor, "prototype", { writable: false }); return Constructor; }
+function _toPropertyKey(t) { var i = _toPrimitive(t, "string"); return "symbol" == _typeof(i) ? i : String(i); }
+function _toPrimitive(t, r) { if ("object" != _typeof(t) || !t) return t; var e = t[Symbol.toPrimitive]; if (void 0 !== e) { var i = e.call(t, r || "default"); if ("object" != _typeof(i)) return i; throw new TypeError("@@toPrimitive must return a primitive value."); } return ("string" === r ? String : Number)(t); }
+function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (o) { return typeof o; } : function (o) { return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o; }, _typeof(o); }
 var global$1 = typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {};
-
 var global = typeof global$1 !== "undefined" ? global$1 : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {};
 
 /** Detect free variable `global` from Node.js. */
-var freeGlobal = typeof global == 'object' && global && global.Object === Object && global;
+var freeGlobal = _typeof(global) == 'object' && global && global.Object === Object && global;
 
 /** Detect free variable `self`. */
-var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
+var freeSelf = (typeof self === "undefined" ? "undefined" : _typeof(self)) == 'object' && self && self.Object === Object && self;
 
 /** Used as a reference to the global object. */
 var root = freeGlobal || freeSelf || Function('return this')();
 
 /** Built-in value references. */
-var Symbol = root.Symbol;
+var _Symbol = root.Symbol;
 
 /** Used for built-in method references. */
 var objectProto$e = Object.prototype;
@@ -30,7 +45,7 @@ var hasOwnProperty$b = objectProto$e.hasOwnProperty;
 var nativeObjectToString$1 = objectProto$e.toString;
 
 /** Built-in value references. */
-var symToStringTag$1 = Symbol ? Symbol.toStringTag : undefined;
+var symToStringTag$1 = _Symbol ? _Symbol.toStringTag : undefined;
 
 /**
  * A specialized version of `baseGetTag` which ignores `Symbol.toStringTag` values.
@@ -83,7 +98,7 @@ var nullTag = '[object Null]',
   undefinedTag = '[object Undefined]';
 
 /** Built-in value references. */
-var symToStringTag = Symbol ? Symbol.toStringTag : undefined;
+var symToStringTag = _Symbol ? _Symbol.toStringTag : undefined;
 
 /**
  * The base implementation of `getTag` without fallbacks for buggy environments.
@@ -124,7 +139,7 @@ function baseGetTag(value) {
  * // => false
  */
 function isObjectLike(value) {
-  return value != null && typeof value == 'object';
+  return value != null && _typeof(value) == 'object';
 }
 
 /** `Object#toString` result references. */
@@ -148,7 +163,7 @@ var symbolTag$1 = '[object Symbol]';
  * // => false
  */
 function isSymbol(value) {
-  return typeof value == 'symbol' || isObjectLike(value) && baseGetTag(value) == symbolTag$1;
+  return _typeof(value) == 'symbol' || isObjectLike(value) && baseGetTag(value) == symbolTag$1;
 }
 
 /**
@@ -199,7 +214,7 @@ var isArray = Array.isArray;
 var INFINITY$2 = 1 / 0;
 
 /** Used to convert symbols to primitives and strings. */
-var symbolProto$1 = Symbol ? Symbol.prototype : undefined,
+var symbolProto$1 = _Symbol ? _Symbol.prototype : undefined,
   symbolToString = symbolProto$1 ? symbolProto$1.toString : undefined;
 
 /**
@@ -283,7 +298,7 @@ function baseTrim(string) {
  * // => false
  */
 function isObject(value) {
-  var type = typeof value;
+  var type = _typeof(value);
   return value != null && (type == 'object' || type == 'function');
 }
 
@@ -707,7 +722,6 @@ function constant(value) {
     return value;
   };
 }
-
 var defineProperty = function () {
   try {
     var func = getNative(Object, 'defineProperty');
@@ -759,7 +773,7 @@ var reIsUint = /^(?:0|[1-9]\d*)$/;
  * @returns {boolean} Returns `true` if `value` is a valid index, else `false`.
  */
 function isIndex(value, length) {
-  var type = typeof value;
+  var type = _typeof(value);
   length = length == null ? MAX_SAFE_INTEGER$1 : length;
   return !!length && (type == 'number' || type != 'symbol' && reIsUint.test(value)) && value > -1 && value % 1 == 0 && value < length;
 }
@@ -995,7 +1009,7 @@ function isIterateeCall(value, index, object) {
   if (!isObject(object)) {
     return false;
   }
-  var type = typeof index;
+  var type = _typeof(index);
   if (type == 'number' ? isArrayLike(object) && isIndex(index, object.length) : type == 'string' && index in object) {
     return eq(object[index], value);
   }
@@ -1130,10 +1144,10 @@ function stubFalse() {
 }
 
 /** Detect free variable `exports`. */
-var freeExports$2 = typeof exports == 'object' && exports && !exports.nodeType && exports;
+var freeExports$2 = (typeof exports === "undefined" ? "undefined" : _typeof(exports)) == 'object' && exports && !exports.nodeType && exports;
 
 /** Detect free variable `module`. */
-var freeModule$2 = freeExports$2 && typeof module == 'object' && module && !module.nodeType && module;
+var freeModule$2 = freeExports$2 && (typeof module === "undefined" ? "undefined" : _typeof(module)) == 'object' && module && !module.nodeType && module;
 
 /** Detect the popular CommonJS extension `module.exports`. */
 var moduleExports$2 = freeModule$2 && freeModule$2.exports === freeExports$2;
@@ -1219,10 +1233,10 @@ function baseUnary(func) {
 }
 
 /** Detect free variable `exports`. */
-var freeExports$1 = typeof exports == 'object' && exports && !exports.nodeType && exports;
+var freeExports$1 = (typeof exports === "undefined" ? "undefined" : _typeof(exports)) == 'object' && exports && !exports.nodeType && exports;
 
 /** Detect free variable `module`. */
-var freeModule$1 = freeExports$1 && typeof module == 'object' && module && !module.nodeType && module;
+var freeModule$1 = freeExports$1 && (typeof module === "undefined" ? "undefined" : _typeof(module)) == 'object' && module && !module.nodeType && module;
 
 /** Detect the popular CommonJS extension `module.exports`. */
 var moduleExports$1 = freeModule$1 && freeModule$1.exports === freeExports$1;
@@ -1468,7 +1482,7 @@ function isKey(value, object) {
   if (isArray(value)) {
     return false;
   }
-  var type = typeof value;
+  var type = _typeof(value);
   if (type == 'number' || type == 'symbol' || type == 'boolean' || value == null || isSymbol(value)) {
     return true;
   }
@@ -1759,7 +1773,7 @@ function mapCacheClear() {
  * @returns {boolean} Returns `true` if `value` is suitable, else `false`.
  */
 function isKeyable(value) {
-  var type = typeof value;
+  var type = _typeof(value);
   return type == 'string' || type == 'number' || type == 'symbol' || type == 'boolean' ? value !== '__proto__' : value === null;
 }
 
@@ -1910,7 +1924,7 @@ function memoize(func, resolver) {
   if (typeof func != 'function' || resolver != null && typeof resolver != 'function') {
     throw new TypeError(FUNC_ERROR_TEXT);
   }
-  var memoized = function () {
+  var memoized = function memoized() {
     var args = arguments,
       key = resolver ? resolver.apply(this, args) : args[0],
       cache = memoized.cache;
@@ -2099,7 +2113,7 @@ function arrayPush(array, values) {
 }
 
 /** Built-in value references. */
-var spreadableSymbol = Symbol ? Symbol.isConcatSpreadable : undefined;
+var spreadableSymbol = _Symbol ? _Symbol.isConcatSpreadable : undefined;
 
 /**
  * Checks if `value` is a flattenable `arguments` object or array.
@@ -2378,10 +2392,10 @@ Stack.prototype.has = stackHas;
 Stack.prototype.set = stackSet;
 
 /** Detect free variable `exports`. */
-var freeExports = typeof exports == 'object' && exports && !exports.nodeType && exports;
+var freeExports = (typeof exports === "undefined" ? "undefined" : _typeof(exports)) == 'object' && exports && !exports.nodeType && exports;
 
 /** Detect free variable `module`. */
-var freeModule = freeExports && typeof module == 'object' && module && !module.nodeType && module;
+var freeModule = freeExports && (typeof module === "undefined" ? "undefined" : _typeof(module)) == 'object' && module && !module.nodeType && module;
 
 /** Detect the popular CommonJS extension `module.exports`. */
 var moduleExports = freeModule && freeModule.exports === freeExports;
@@ -2545,7 +2559,7 @@ var getTag = baseGetTag;
 
 // Fallback for data views, maps, sets, and weak maps in IE 11 and promises in Node.js < 6.
 if (DataView$1 && getTag(new DataView$1(new ArrayBuffer(1))) != dataViewTag$1 || Map && getTag(new Map()) != mapTag$1 || Promise$2 && getTag(Promise$2.resolve()) != promiseTag || Set$1 && getTag(new Set$1()) != setTag$1 || WeakMap$1 && getTag(new WeakMap$1()) != weakMapTag) {
-  getTag = function (value) {
+  getTag = function getTag(value) {
     var result = baseGetTag(value),
       Ctor = result == objectTag$1 ? value.constructor : undefined,
       ctorString = Ctor ? toSource(Ctor) : '';
@@ -2813,7 +2827,7 @@ var arrayBufferTag = '[object ArrayBuffer]',
   dataViewTag = '[object DataView]';
 
 /** Used to convert symbols to primitives and strings. */
-var symbolProto = Symbol ? Symbol.prototype : undefined,
+var symbolProto = _Symbol ? _Symbol.prototype : undefined,
   symbolValueOf = symbolProto ? symbolProto.valueOf : undefined;
 
 /**
@@ -3329,7 +3343,7 @@ function baseIteratee(value) {
   if (value == null) {
     return identity;
   }
-  if (typeof value == 'object') {
+  if (_typeof(value) == 'object') {
     return isArray(value) ? baseMatchesProperty(value[0], value[1]) : baseMatches(value);
   }
   return property(value);
@@ -3861,7 +3875,7 @@ var nativeMin = Math.min,
  * _.random(1.2, 5.2);
  * // => a floating-point number between 1.2 and 5.2
  */
-function random(lower, upper, floating) {
+function _random(lower, upper, floating) {
   if (floating && typeof floating != 'boolean' && isIterateeCall(lower, upper, floating)) {
     upper = floating = undefined;
   }
@@ -3939,337 +3953,468 @@ var sortBy = baseRest(function (collection, iteratees) {
   }
   return baseOrderBy(collection, baseFlatten(iteratees, 1), []);
 });
-
-const fromBin = bin => parseInt(bin, 2);
-const fromBinToBase32 = bin => parseInt(bin, 2).toString(32);
-const fromBase32ToBin = b32 => parseInt(b32, 32).toString(2);
-class Base {
-  static charToBin(char) {
-    return fromBase32ToBin(char).padStart(5, '0');
+var fromBin = function fromBin(bin) {
+  return parseInt(bin, 2);
+};
+var fromBinToBase32 = function fromBinToBase32(bin) {
+  return parseInt(bin, 2).toString(32);
+};
+var fromBase32ToBin = function fromBase32ToBin(b32) {
+  return parseInt(b32, 32).toString(2);
+};
+var Base = /*#__PURE__*/function () {
+  function Base() {
+    _classCallCheck(this, Base);
   }
-  static targetTypes(char, typesArray = null) {
-    return (typesArray || ['sensor', 'neuron', 'action'])[char] || 'neuron';
-  }
-  static getConfig(char = '') {
-    let base = {
-      config: this.charToBin(char[0])
-    };
-    const [data, [type]] = chunk(base.config.split(''), 4);
-    base.type = type;
-    if (type === '0') {
-      base.type = 'connection';
-    } else if (type === '1') {
-      base.type = 'bias';
+  _createClass(Base, null, [{
+    key: "charToBin",
+    value: function charToBin(_char) {
+      return fromBase32ToBin(_char).padStart(5, '0');
     }
-    const sign = base.type === 'bias' ? data.pop() : undefined;
-    base.data = fromBin(data.join(''));
-    if (sign === '1') base.data *= -1;
-    return base;
-  }
-  static getTarget(str = '', typeSize = 1, targetTypes = null) {
-    let bins = str.split('').map(x => this.charToBin(x));
-    bins = bins.join('').split('');
-    const [id, type] = chunk(bins, bins.length - typeSize);
-    return {
-      id: fromBin(id.join('')),
-      type: this.targetTypes(fromBin(type.join('')), targetTypes)
-    };
-  }
-  static fromString(str = '') {
-    let base = {
-      encoded: str
-    };
-    base = merge(base, this.getConfig(base.encoded[0]));
-    if (base.type === 'bias') {
-      base.encoded = base.encoded.padEnd(3, '0');
-      base.target = this.getTarget(base.encoded[1] + base.encoded[2], 2);
-    } else if (base.type === 'connection') {
-      base.encoded = base.encoded.padEnd(5, '0');
-      base.source = this.getTarget(base.encoded[1] + base.encoded[2], 1, ['sensor', 'neuron']);
-      base.target = this.getTarget(base.encoded[3] + base.encoded[4], 1, ['neuron', 'action']);
+  }, {
+    key: "targetTypes",
+    value: function targetTypes(_char2) {
+      var typesArray = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
+      return (typesArray || ['sensor', 'neuron', 'action'])[_char2] || 'neuron';
     }
-    delete base.config;
-    return base;
-  }
-  static toString(base) {
-    let str = '';
-    if (base.type === 'bias') {
-      // config
-      str += Math.abs(base.data).toString(2).padStart(3, '0');
-      if (base.data >= 0) str += '0';else str += '1';
-      str += '1';
-
-      // target
-      str += base.target.id.toString(2).padStart(8, '0');
-      if (base.target.type === 'sensor') str += '00';else if (base.target.type === 'neuron') str += '01';else if (base.target.type === 'action') str += '10';else str += '01';
-    } else if (base.type === 'connection') {
-      // config
-      str += Math.abs(base.data).toString(2).padStart(4, '0');
-      str += '0';
-
-      // source
-      str += base.source.id.toString(2).padStart(9, '0');
-      if (base.source.type === 'sensor') str += '0';else if (base.source.type === 'neuron') str += '1';else str += '1';
-
-      // target
-      str += base.target.id.toString(2).padStart(9, '0');
-      if (base.target.type === 'neuron') str += '0';else if (base.target.type === 'action') str += '1';else str += '0';
+  }, {
+    key: "getConfig",
+    value: function getConfig() {
+      var _char3 = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : '';
+      var base = {
+        config: this.charToBin(_char3[0])
+      };
+      var _chunk = chunk(base.config.split(''), 4),
+        _chunk2 = _slicedToArray(_chunk, 2),
+        data = _chunk2[0],
+        _chunk2$ = _slicedToArray(_chunk2[1], 1),
+        type = _chunk2$[0];
+      base.type = type;
+      if (type === '0') {
+        base.type = 'connection';
+      } else if (type === '1') {
+        base.type = 'bias';
+      }
+      var sign = base.type === 'bias' ? data.pop() : undefined;
+      base.data = fromBin(data.join(''));
+      if (sign === '1') base.data *= -1;
+      return base;
     }
-    return chunk(str, 5).map(x => fromBinToBase32(x.join(''))).join('').toUpperCase();
-  }
-  static random() {
-    if (random(0, 10) < 5) {
+  }, {
+    key: "getTarget",
+    value: function getTarget() {
+      var _this = this;
+      var str = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : '';
+      var typeSize = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 1;
+      var targetTypes = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : null;
+      var bins = str.split('').map(function (x) {
+        return _this.charToBin(x);
+      });
+      bins = bins.join('').split('');
+      var _chunk3 = chunk(bins, bins.length - typeSize),
+        _chunk4 = _slicedToArray(_chunk3, 2),
+        id = _chunk4[0],
+        type = _chunk4[1];
       return {
-        type: 'bias',
-        data: random(0, 4),
+        id: fromBin(id.join('')),
+        type: this.targetTypes(fromBin(type.join('')), targetTypes)
+      };
+    }
+  }, {
+    key: "fromString",
+    value: function fromString() {
+      var str = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : '';
+      var base = {
+        encoded: str
+      };
+      base = merge(base, this.getConfig(base.encoded[0]));
+      if (base.type === 'bias') {
+        base.encoded = base.encoded.padEnd(3, '0');
+        base.target = this.getTarget(base.encoded[1] + base.encoded[2], 2);
+      } else if (base.type === 'connection') {
+        base.encoded = base.encoded.padEnd(5, '0');
+        base.source = this.getTarget(base.encoded[1] + base.encoded[2], 1, ['sensor', 'neuron']);
+        base.target = this.getTarget(base.encoded[3] + base.encoded[4], 1, ['neuron', 'action']);
+      }
+      delete base.config;
+      return base;
+    }
+  }, {
+    key: "toString",
+    value: function toString(base) {
+      var str = '';
+      if (base.type === 'bias') {
+        // config
+        str += Math.abs(base.data).toString(2).padStart(3, '0');
+        if (base.data >= 0) str += '0';else str += '1';
+        str += '1';
+
+        // target
+        str += base.target.id.toString(2).padStart(8, '0');
+        if (base.target.type === 'sensor') str += '00';else if (base.target.type === 'neuron') str += '01';else if (base.target.type === 'action') str += '10';else str += '01';
+      } else if (base.type === 'connection') {
+        // config
+        str += Math.abs(base.data).toString(2).padStart(4, '0');
+        str += '0';
+
+        // source
+        str += base.source.id.toString(2).padStart(9, '0');
+        if (base.source.type === 'sensor') str += '0';else if (base.source.type === 'neuron') str += '1';else str += '1';
+
+        // target
+        str += base.target.id.toString(2).padStart(9, '0');
+        if (base.target.type === 'neuron') str += '0';else if (base.target.type === 'action') str += '1';else str += '0';
+      }
+      return chunk(str, 5).map(function (x) {
+        return fromBinToBase32(x.join(''));
+      }).join('').toUpperCase();
+    }
+  }, {
+    key: "random",
+    value: function random() {
+      if (_random(0, 10) < 5) {
+        return {
+          type: 'bias',
+          data: _random(0, 4),
+          target: {
+            id: _random(1, 100),
+            type: ['sensor', 'neuron', 'action'][_random(0, 2)]
+          }
+        };
+      }
+      return {
+        type: 'connection',
+        data: _random(0, 4),
+        source: {
+          type: ['sensor', 'neuron', 'action'][_random(0, 2)],
+          id: _random(1, 100)
+        },
         target: {
-          id: random(1, 100),
-          type: ['sensor', 'neuron', 'action'][random(0, 2)]
+          type: ['sensor', 'neuron', 'action'][_random(0, 2)],
+          id: _random(1, 100)
         }
       };
     }
-    return {
-      type: 'connection',
-      data: random(0, 4),
-      source: {
-        type: ['sensor', 'neuron', 'action'][random(0, 2)],
-        id: random(1, 100)
-      },
-      target: {
-        type: ['sensor', 'neuron', 'action'][random(0, 2)],
-        id: random(1, 100)
+  }, {
+    key: "randomString",
+    value: function randomString() {
+      return this.toString(this.random());
+    }
+  }, {
+    key: "randomWith",
+    value: function randomWith() {
+      var _ref = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {},
+        _ref$neurons = _ref.neurons,
+        neurons = _ref$neurons === void 0 ? 1 : _ref$neurons,
+        _ref$sensors = _ref.sensors,
+        sensors = _ref$sensors === void 0 ? 1 : _ref$sensors,
+        _ref$actions = _ref.actions,
+        actions = _ref$actions === void 0 ? 1 : _ref$actions;
+      // bias base
+      if (_random(0, 100) < 25) {
+        var _data = _random(-3, 3);
+        if (_random(0, 100) < 33) {
+          return {
+            type: 'bias',
+            data: _data,
+            target: {
+              type: 'sensor',
+              id: _random(0, sensors - 1)
+            }
+          };
+        } else if (_random(0, 100) < 50) {
+          return {
+            type: 'bias',
+            data: _data,
+            target: {
+              type: 'neuron',
+              id: _random(0, neurons - 1)
+            }
+          };
+        } else {
+          return {
+            type: 'bias',
+            data: _data,
+            target: {
+              type: 'sensor',
+              id: _random(0, actions - 1)
+            }
+          };
+        }
       }
-    };
-  }
-  static randomString() {
-    return this.toString(this.random());
-  }
-  static randomWith({
-    neurons = 1,
-    sensors = 1,
-    actions = 1
-  } = {}) {
-    // bias base
-    if (random(0, 100) < 25) {
-      const data = random(-3, 3);
-      if (random(0, 100) < 33) {
+      var data = _random(0, 4);
+      if (_random(0, 100) < 50) {
         return {
-          type: 'bias',
-          data,
-          target: {
+          type: 'connection',
+          data: data,
+          source: {
             type: 'sensor',
-            id: random(0, sensors - 1)
-          }
-        };
-      } else if (random(0, 100) < 50) {
-        return {
-          type: 'bias',
-          data,
+            id: _random(0, sensors - 1)
+          },
           target: {
             type: 'neuron',
-            id: random(0, neurons - 1)
+            id: _random(0, neurons - 1)
           }
         };
       } else {
         return {
-          type: 'bias',
-          data,
+          type: 'connection',
+          data: data,
+          source: {
+            type: 'neuron',
+            id: _random(0, neurons - 1)
+          },
           target: {
-            type: 'sensor',
-            id: random(0, actions - 1)
+            type: 'action',
+            id: _random(0, actions - 1)
           }
         };
       }
     }
-    const data = random(0, 4);
-    if (random(0, 100) < 50) {
-      return {
-        type: 'connection',
-        data,
-        source: {
-          type: 'sensor',
-          id: random(0, sensors - 1)
-        },
-        target: {
-          type: 'neuron',
-          id: random(0, neurons - 1)
-        }
-      };
-    } else {
-      return {
-        type: 'connection',
-        data,
-        source: {
-          type: 'neuron',
-          id: random(0, neurons - 1)
-        },
-        target: {
-          type: 'action',
-          id: random(0, actions - 1)
-        }
-      };
+  }]);
+  return Base;
+}();
+var Genome = /*#__PURE__*/function () {
+  function Genome() {
+    _classCallCheck(this, Genome);
+  }
+  _createClass(Genome, null, [{
+    key: "from",
+    value: function from(data) {
+      return isString(data) ? this.fromString(data) : isArray(data) ? this.fromBases(data) : data;
     }
-  }
-}
-
-class Genome {
-  static from(data) {
-    return isString(data) ? this.fromString(data) : isArray(data) ? this.fromBases(data) : data;
-  }
-  static fromString(str = '') {
-    let genome = {
-      encoded: (str || '').toUpperCase().trim(),
-      bases: []
-    };
-    let data = str.split('');
-    while (data.length > 0) {
-      let base = data.shift();
-      const config = Base.fromString(base);
-      if (config.type === 'bias') {
-        base += data.shift() || '';
-        base += data.shift() || '';
-      } else if (config.type === 'connection') {
-        base += data.shift() || '';
-        base += data.shift() || '';
-        base += data.shift() || '';
-        base += data.shift() || '';
+  }, {
+    key: "fromString",
+    value: function fromString() {
+      var str = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : '';
+      var genome = {
+        encoded: (str || '').toUpperCase().trim(),
+        bases: []
+      };
+      var data = str.split('');
+      while (data.length > 0) {
+        var base = data.shift();
+        var config = Base.fromString(base);
+        if (config.type === 'bias') {
+          base += data.shift() || '';
+          base += data.shift() || '';
+        } else if (config.type === 'connection') {
+          base += data.shift() || '';
+          base += data.shift() || '';
+          base += data.shift() || '';
+          base += data.shift() || '';
+        }
+        base = Base.fromString(base.trim());
+        genome.bases.push(base);
       }
-      base = Base.fromString(base.trim());
-      genome.bases.push(base);
+      return genome;
     }
-    return genome;
-  }
-  static fromBases(bases) {
-    return {
-      bases,
-      encoded: bases.map(base => Base.toString(base)).join('')
-    };
-  }
-  static toString(bases) {
-    return bases.map(base => Base.toString(base)).join('');
-  }
-  static random(count = 1) {
-    const bases = new Array(count).fill(null).map(() => Base.random());
-    return {
-      bases,
-      encoded: bases.map(base => Base.toString(base)).join('')
-    };
-  }
-  static randomWith(count = 1, {
-    neurons = 1,
-    sensors = 1,
-    actions = 1
-  } = {}) {
-    const bases = new Array(count).fill(null).map(() => Base.randomWith({
-      neurons,
-      sensors,
-      actions
-    }));
-    return {
-      bases,
-      encoded: bases.map(base => Base.toString(base)).join('')
-    };
-  }
-}
-
+  }, {
+    key: "fromBases",
+    value: function fromBases(bases) {
+      return {
+        bases: bases,
+        encoded: bases.map(function (base) {
+          return Base.toString(base);
+        }).join('')
+      };
+    }
+  }, {
+    key: "toString",
+    value: function toString(bases) {
+      return bases.map(function (base) {
+        return Base.toString(base);
+      }).join('');
+    }
+  }, {
+    key: "random",
+    value: function random() {
+      var count = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 1;
+      var bases = new Array(count).fill(null).map(function () {
+        return Base.random();
+      });
+      return {
+        bases: bases,
+        encoded: bases.map(function (base) {
+          return Base.toString(base);
+        }).join('')
+      };
+    }
+  }, {
+    key: "randomWith",
+    value: function randomWith() {
+      var count = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 1;
+      var _ref2 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
+        _ref2$neurons = _ref2.neurons,
+        neurons = _ref2$neurons === void 0 ? 1 : _ref2$neurons,
+        _ref2$sensors = _ref2.sensors,
+        sensors = _ref2$sensors === void 0 ? 1 : _ref2$sensors,
+        _ref2$actions = _ref2.actions,
+        actions = _ref2$actions === void 0 ? 1 : _ref2$actions;
+      var bases = new Array(count).fill(null).map(function () {
+        return Base.randomWith({
+          neurons: neurons,
+          sensors: sensors,
+          actions: actions
+        });
+      });
+      return {
+        bases: bases,
+        encoded: bases.map(function (base) {
+          return Base.toString(base);
+        }).join('')
+      };
+    }
+  }]);
+  return Genome;
+}();
 function dotProduct(a, b) {
-  return a.reduce((acc, v, i) => acc + v * b[i], 0);
+  return a.reduce(function (acc, v, i) {
+    return acc + v * b[i];
+  }, 0);
 }
-class Vertex {
-  constructor(name, metadata = {}) {
+var Vertex = /*#__PURE__*/function () {
+  function Vertex(name) {
+    var metadata = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+    _classCallCheck(this, Vertex);
     this.name = name;
-    this.metadata = {
-      ...metadata
-    };
-    this.in = [];
+    this.metadata = _objectSpread({}, metadata);
+    this["in"] = [];
     this.inMap = {};
     this.out = [];
     this.outMap = {};
   }
-  addIn(vertex, weight) {
-    if (!this.inMap[vertex.name]) {
-      this.inMap[vertex.name] = {
-        weight,
-        index: this.in.push({
-          vertex,
-          weight
-        }) - 1
+  _createClass(Vertex, [{
+    key: "addIn",
+    value: function addIn(vertex, weight) {
+      if (!this.inMap[vertex.name]) {
+        this.inMap[vertex.name] = {
+          weight: weight,
+          index: this["in"].push({
+            vertex: vertex,
+            weight: weight
+          }) - 1
+        };
+      } else {
+        this.inMap[vertex.name].weight += weight;
+        this["in"][this.inMap[vertex.name].index].weight += weight;
+      }
+    }
+  }, {
+    key: "addOut",
+    value: function addOut(vertex, weight) {
+      if (!this.outMap[vertex.name]) {
+        this.outMap[vertex.name] = {
+          weight: weight,
+          index: this.out.push({
+            vertex: vertex,
+            weight: weight
+          }) - 1
+        };
+      } else {
+        this.outMap[vertex.name].weight += weight;
+        this.out[this.outMap[vertex.name].index].weight += weight;
+      }
+    }
+  }, {
+    key: "neighbors",
+    value: function neighbors() {
+      var fn = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : null;
+      return fn ? this["in"].filter(fn).concat(this.out.filter(fn)) : this["in"].concat(this.out);
+    }
+  }, {
+    key: "toJSON",
+    value: function toJSON() {
+      return {
+        name: this.name,
+        metadata: this.metadata,
+        "in": this["in"].map(function (v) {
+          return v.vertex.name;
+        }),
+        out: this.out.map(function (v) {
+          return v.vertex.name;
+        })
       };
-    } else {
-      this.inMap[vertex.name].weight += weight;
-      this.in[this.inMap[vertex.name].index].weight += weight;
     }
-  }
-  addOut(vertex, weight) {
-    if (!this.outMap[vertex.name]) {
-      this.outMap[vertex.name] = {
-        weight,
-        index: this.out.push({
-          vertex,
-          weight
-        }) - 1
-      };
-    } else {
-      this.outMap[vertex.name].weight += weight;
-      this.out[this.outMap[vertex.name].index].weight += weight;
+  }, {
+    key: "toString",
+    value: function toString() {
+      return JSON.stringify(this.toJSON(), null, 2);
     }
-  }
-  neighbors(fn = null) {
-    return fn ? this.in.filter(fn).concat(this.out.filter(fn)) : this.in.concat(this.out);
-  }
-  toJSON() {
-    return {
-      name: this.name,
-      metadata: this.metadata,
-      in: this.in.map(v => v.vertex.name),
-      out: this.out.map(v => v.vertex.name)
-    };
-  }
-  toString() {
-    return JSON.stringify(this.toJSON(), null, 2);
-  }
-  inputsTree(deph = 0, visited = {}) {
-    if (visited[this.name]) return [];
-    let pile = [];
-    visited[this.name] = pile.push({
-      deph,
-      vertex: this
-    });
-    for (const input of this.in) {
-      let subPile = input.vertex.inputsTree(deph + 1, visited);
-      subPile = subPile.filter(v => !visited[v.name]);
-      pile = pile.concat(subPile);
+  }, {
+    key: "inputsTree",
+    value: function inputsTree() {
+      var deph = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 0;
+      var visited = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+      if (visited[this.name]) return [];
+      var pile = [];
+      visited[this.name] = pile.push({
+        deph: deph,
+        vertex: this
+      });
+      var _iterator = _createForOfIteratorHelper(this["in"]),
+        _step;
+      try {
+        for (_iterator.s(); !(_step = _iterator.n()).done;) {
+          var input = _step.value;
+          var subPile = input.vertex.inputsTree(deph + 1, visited);
+          subPile = subPile.filter(function (v) {
+            return !visited[v.name];
+          });
+          pile = pile.concat(subPile);
+        }
+      } catch (err) {
+        _iterator.e(err);
+      } finally {
+        _iterator.f();
+      }
+      return sortBy(pile, ['deph']);
     }
-    return sortBy(pile, ['deph']);
-  }
-  calculateInput() {
-    let values = [],
-      weights = [];
-    for (const {
-      vertex,
-      weight
-    } of this.in) {
-      values.push(vertex.metadata.lastTick || 0);
-      weights.push(weight);
+  }, {
+    key: "calculateInput",
+    value: function calculateInput() {
+      var values = [],
+        weights = [];
+      var _iterator2 = _createForOfIteratorHelper(this["in"]),
+        _step2;
+      try {
+        for (_iterator2.s(); !(_step2 = _iterator2.n()).done;) {
+          var _step2$value = _step2.value,
+            vertex = _step2$value.vertex,
+            weight = _step2$value.weight;
+          values.push(vertex.metadata.lastTick || 0);
+          weights.push(weight);
+        }
+      } catch (err) {
+        _iterator2.e(err);
+      } finally {
+        _iterator2.f();
+      }
+      return dotProduct(values, weights);
     }
-    return dotProduct(values, weights);
-  }
-}
-
-function sigmoid(x = 0) {
+  }]);
+  return Vertex;
+}();
+function sigmoid() {
+  var x = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 0;
   return 1 / (1 + Math.exp(x * -1));
 }
-function relu(x = 0) {
+function relu() {
+  var x = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 0;
   return Math.max(0, x);
 }
-class Brain {
-  constructor({
-    genome,
-    sensors = [],
-    actions = [],
-    environment = {},
-    activationFunction = 'relu'
-  }) {
+var Brain = /*#__PURE__*/function () {
+  function Brain(_ref3) {
+    var genome = _ref3.genome,
+      _ref3$sensors = _ref3.sensors,
+      sensors = _ref3$sensors === void 0 ? [] : _ref3$sensors,
+      _ref3$actions = _ref3.actions,
+      actions = _ref3$actions === void 0 ? [] : _ref3$actions,
+      _ref3$environment = _ref3.environment,
+      environment = _ref3$environment === void 0 ? {} : _ref3$environment,
+      _ref3$activationFunct = _ref3.activationFunction,
+      activationFunction = _ref3$activationFunct === void 0 ? 'relu' : _ref3$activationFunct;
+    _classCallCheck(this, Brain);
     this.environment = environment;
     this.genome = Genome.from(genome);
     this.activationFunction = activationFunction === 'sigmoid' ? sigmoid : relu;
@@ -4279,199 +4424,297 @@ class Brain {
       neurons: {},
       sensors: {}
     };
-    this.sensors = sensors.reduce((acc, sensor, i) => {
-      if (!sensor.name) sensor.name = `s#${sensor.id || i}`;
+    this.sensors = sensors.reduce(function (acc, sensor, i) {
+      if (!sensor.name) sensor.name = "s#".concat(sensor.id || i);
       acc[sensor.name] = sensor;
       return acc;
     }, {});
-    this.actions = actions.reduce((acc, action, i) => {
-      if (!action.name) action.name = `a#${action.id || i}`;
+    this.actions = actions.reduce(function (acc, action, i) {
+      if (!action.name) action.name = "a#".concat(action.id || i);
       acc[action.name] = action;
       return acc;
     }, {});
     this.tickOrder = [];
     this.setup();
   }
-  setup() {
-    for (const base of this.genome.bases) {
-      if (base.type === 'bias') this.setupBias(base);else if (base.type === 'connection') this.setupConnection(base);
-    }
-    this.tickOrder = this.defineTickOrder();
-    const env = this.environment;
-    const activationFunction = this.activationFunction;
-    for (const vertex of Object.values(this.definitions.sensors)) {
-      let fn = this.sensors[vertex.name]?.tick || (() => 0);
-      fn = fn.bind(env.me || this);
-      vertex.tick = function () {
-        const result = fn(env) + (this.metadata.bias || 0);
-        this.metadata.lastTick = result;
-        return result;
-      };
-    }
-    for (const vertex of Object.values(this.definitions.neurons)) {
-      vertex.tick = function () {
-        let input = this.calculateInput();
-        let result = activationFunction(input + (this.metadata.bias || 0));
-        this.metadata.lastTick = result;
-        return result;
-      };
-    }
-    for (const vertex of Object.values(this.definitions.actions)) {
-      let fn = this.actions[vertex.name]?.tick || (() => 0);
-      fn = fn.bind(env.me || this);
-      vertex.tick = function () {
-        let input = this.calculateInput();
-        input = activationFunction(input + (this.metadata.bias || 0));
-        const result = fn(input, env);
-        this.metadata.lastTick = result;
-        return result;
-      };
-    }
-  }
-  setupBias({
-    target,
-    data
-  }) {
-    this.findOrCreateVertex({
-      id: target.id,
-      collection: target.type + 's',
-      metadata: {
-        bias: data || 0,
-        type: target.type
+  _createClass(Brain, [{
+    key: "setup",
+    value: function setup() {
+      var _this2 = this;
+      var _iterator3 = _createForOfIteratorHelper(this.genome.bases),
+        _step3;
+      try {
+        for (_iterator3.s(); !(_step3 = _iterator3.n()).done;) {
+          var base = _step3.value;
+          if (base.type === 'bias') this.setupBias(base);else if (base.type === 'connection') this.setupConnection(base);
+        }
+      } catch (err) {
+        _iterator3.e(err);
+      } finally {
+        _iterator3.f();
       }
-    });
-  }
-  setupConnection({
-    data,
-    source,
-    target
-  }) {
-    const x = this.findOrCreateVertex({
-      id: source.id,
-      collection: source.type + 's',
-      metadata: {
-        type: source.type
+      this.tickOrder = this.defineTickOrder();
+      var env = this.environment;
+      var activationFunction = this.activationFunction;
+      var _loop = function _loop() {
+        var _this2$sensors$vertex;
+        var vertex = _Object$values[_i];
+        var fn = ((_this2$sensors$vertex = _this2.sensors[vertex.name]) === null || _this2$sensors$vertex === void 0 ? void 0 : _this2$sensors$vertex.tick) || function () {
+          return 0;
+        };
+        fn = fn.bind(env.me || _this2);
+        vertex.tick = function () {
+          var result = fn(env) + (this.metadata.bias || 0);
+          this.metadata.lastTick = result;
+          return result;
+        };
+      };
+      for (var _i = 0, _Object$values = Object.values(this.definitions.sensors); _i < _Object$values.length; _i++) {
+        _loop();
       }
-    });
-    const y = this.findOrCreateVertex({
-      id: target.id,
-      collection: target.type + 's',
-      metadata: {
-        type: target.type
+      for (var _i2 = 0, _Object$values2 = Object.values(this.definitions.neurons); _i2 < _Object$values2.length; _i2++) {
+        var vertex = _Object$values2[_i2];
+        vertex.tick = function () {
+          var input = this.calculateInput();
+          var result = activationFunction(input + (this.metadata.bias || 0));
+          this.metadata.lastTick = result;
+          return result;
+        };
       }
-    });
-    y.addIn(x, data);
-    x.addOut(y, data);
-  }
-  findOrCreateVertex({
-    id,
-    collection,
-    metadata
-  }) {
-    if (!this.definitions[collection][id]) {
-      const vertex = new Vertex(`${collection[0]}#${id}`, {
-        bias: 0,
-        ...metadata,
-        id
-      });
-      this.definitions[collection][id] = vertex;
-      this.definitions.all[vertex.name] = vertex;
-      return vertex;
+      var _loop2 = function _loop2() {
+        var _this2$actions$vertex;
+        var vertex = _Object$values3[_i3];
+        var fn = ((_this2$actions$vertex = _this2.actions[vertex.name]) === null || _this2$actions$vertex === void 0 ? void 0 : _this2$actions$vertex.tick) || function () {
+          return 0;
+        };
+        fn = fn.bind(env.me || _this2);
+        vertex.tick = function () {
+          var input = this.calculateInput();
+          input = activationFunction(input + (this.metadata.bias || 0));
+          var result = fn(input, env);
+          this.metadata.lastTick = result;
+          return result;
+        };
+      };
+      for (var _i3 = 0, _Object$values3 = Object.values(this.definitions.actions); _i3 < _Object$values3.length; _i3++) {
+        _loop2();
+      }
     }
-    this.definitions[collection][id].metadata.bias = this.definitions[collection][id].metadata.bias + (metadata.bias || 0);
-    return this.definitions[collection][id];
-  }
-  defineTickOrder() {
-    let tickList = [];
-    const usableActions = Object.values(this.definitions.actions).filter(action => action.in.length > 0);
-    for (const action of usableActions) {
-      tickList = tickList.concat(action.inputsTree());
-      tickList = sortBy(tickList, ['deph']).reverse();
-    }
-    return tickList;
-  }
-  tick() {
-    const ticked = {};
-    let types = {
-      sensor: [],
-      neuron: [],
-      action: []
-    };
-    for (const {
-      vertex
-    } of this.tickOrder) {
-      types[vertex.metadata.type].push(vertex);
-    }
-    for (const vertex of types.sensor) {
-      if (ticked[vertex.name]) continue;
-      ticked[vertex.name] = vertex.tick();
-    }
-    for (const vertex of types.neuron) {
-      if (ticked[vertex.name]) continue;
-      ticked[vertex.name] = vertex.tick();
-    }
-    let actionsInputs = [];
-    for (const vertex of types.action) {
-      if (ticked[vertex.name]) continue;
-      actionsInputs.push({
-        input: vertex.calculateInput(),
-        vertex
+  }, {
+    key: "setupBias",
+    value: function setupBias(_ref4) {
+      var target = _ref4.target,
+        data = _ref4.data;
+      this.findOrCreateVertex({
+        id: target.id,
+        collection: target.type + 's',
+        metadata: {
+          bias: data || 0,
+          type: target.type
+        }
       });
     }
-    const finalAction = sortBy(actionsInputs, ['input']).pop().vertex;
-    ticked[finalAction.name] = finalAction.tick();
-    return ticked;
-  }
-}
-
-class Reproduction {
-  static genomeMutate(genome, mutationRate = 1 / 1000) {
-    if (isString(genome)) {
-      const g = genome.split('').map(base => {
-        return Math.random() > mutationRate ? base : random(0, 31).toString(32).toUpperCase();
-      }).join('');
-      return Genome.fromString(g);
+  }, {
+    key: "setupConnection",
+    value: function setupConnection(_ref5) {
+      var data = _ref5.data,
+        source = _ref5.source,
+        target = _ref5.target;
+      var x = this.findOrCreateVertex({
+        id: source.id,
+        collection: source.type + 's',
+        metadata: {
+          type: source.type
+        }
+      });
+      var y = this.findOrCreateVertex({
+        id: target.id,
+        collection: target.type + 's',
+        metadata: {
+          type: target.type
+        }
+      });
+      y.addIn(x, data);
+      x.addOut(y, data);
     }
-    const bases = genome.bases.map(base => {
-      return Math.random() > mutationRate ? base : Base.random();
-    });
-    return Genome.fromBases(bases);
+  }, {
+    key: "findOrCreateVertex",
+    value: function findOrCreateVertex(_ref6) {
+      var id = _ref6.id,
+        collection = _ref6.collection,
+        metadata = _ref6.metadata;
+      if (!this.definitions[collection][id]) {
+        var vertex = new Vertex("".concat(collection[0], "#").concat(id), _objectSpread(_objectSpread({
+          bias: 0
+        }, metadata), {}, {
+          id: id
+        }));
+        this.definitions[collection][id] = vertex;
+        this.definitions.all[vertex.name] = vertex;
+        return vertex;
+      }
+      this.definitions[collection][id].metadata.bias = this.definitions[collection][id].metadata.bias + (metadata.bias || 0);
+      return this.definitions[collection][id];
+    }
+  }, {
+    key: "defineTickOrder",
+    value: function defineTickOrder() {
+      var tickList = [];
+      var usableActions = Object.values(this.definitions.actions).filter(function (action) {
+        return action["in"].length > 0;
+      });
+      var _iterator4 = _createForOfIteratorHelper(usableActions),
+        _step4;
+      try {
+        for (_iterator4.s(); !(_step4 = _iterator4.n()).done;) {
+          var action = _step4.value;
+          tickList = tickList.concat(action.inputsTree());
+          tickList = sortBy(tickList, ['deph']).reverse();
+        }
+      } catch (err) {
+        _iterator4.e(err);
+      } finally {
+        _iterator4.f();
+      }
+      return tickList;
+    }
+  }, {
+    key: "tick",
+    value: function tick() {
+      var ticked = {};
+      var types = {
+        sensor: [],
+        neuron: [],
+        action: []
+      };
+      var _iterator5 = _createForOfIteratorHelper(this.tickOrder),
+        _step5;
+      try {
+        for (_iterator5.s(); !(_step5 = _iterator5.n()).done;) {
+          var vertex = _step5.value.vertex;
+          types[vertex.metadata.type].push(vertex);
+        }
+      } catch (err) {
+        _iterator5.e(err);
+      } finally {
+        _iterator5.f();
+      }
+      var _iterator6 = _createForOfIteratorHelper(types.sensor),
+        _step6;
+      try {
+        for (_iterator6.s(); !(_step6 = _iterator6.n()).done;) {
+          var _vertex = _step6.value;
+          if (ticked[_vertex.name]) continue;
+          ticked[_vertex.name] = _vertex.tick();
+        }
+      } catch (err) {
+        _iterator6.e(err);
+      } finally {
+        _iterator6.f();
+      }
+      var _iterator7 = _createForOfIteratorHelper(types.neuron),
+        _step7;
+      try {
+        for (_iterator7.s(); !(_step7 = _iterator7.n()).done;) {
+          var _vertex2 = _step7.value;
+          if (ticked[_vertex2.name]) continue;
+          ticked[_vertex2.name] = _vertex2.tick();
+        }
+      } catch (err) {
+        _iterator7.e(err);
+      } finally {
+        _iterator7.f();
+      }
+      var actionsInputs = [];
+      var _iterator8 = _createForOfIteratorHelper(types.action),
+        _step8;
+      try {
+        for (_iterator8.s(); !(_step8 = _iterator8.n()).done;) {
+          var _vertex3 = _step8.value;
+          if (ticked[_vertex3.name]) continue;
+          actionsInputs.push({
+            input: _vertex3.calculateInput(),
+            vertex: _vertex3
+          });
+        }
+      } catch (err) {
+        _iterator8.e(err);
+      } finally {
+        _iterator8.f();
+      }
+      var finalAction = sortBy(actionsInputs, ['input']).pop().vertex;
+      ticked[finalAction.name] = finalAction.tick();
+      return ticked;
+    }
+  }]);
+  return Brain;
+}();
+var Reproduction = /*#__PURE__*/function () {
+  function Reproduction() {
+    _classCallCheck(this, Reproduction);
   }
-}
-
-class Individual {
-  constructor({
-    genome = null,
-    sensors = [],
-    actions = [],
-    environment = {}
-  }) {
+  _createClass(Reproduction, null, [{
+    key: "genomeMutate",
+    value: function genomeMutate(genome) {
+      var mutationRate = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 1 / 1000;
+      if (isString(genome)) {
+        var g = genome.split('').map(function (base) {
+          return Math.random() > mutationRate ? base : _random(0, 31).toString(32).toUpperCase();
+        }).join('');
+        return Genome.fromString(g);
+      }
+      var bases = genome.bases.map(function (base) {
+        return Math.random() > mutationRate ? base : Base.random();
+      });
+      return Genome.fromBases(bases);
+    }
+  }]);
+  return Reproduction;
+}();
+var Individual = /*#__PURE__*/function () {
+  function Individual(_ref7) {
+    var _this3 = this;
+    var _ref7$genome = _ref7.genome,
+      genome = _ref7$genome === void 0 ? null : _ref7$genome,
+      _ref7$sensors = _ref7.sensors,
+      sensors = _ref7$sensors === void 0 ? [] : _ref7$sensors,
+      _ref7$actions = _ref7.actions,
+      actions = _ref7$actions === void 0 ? [] : _ref7$actions,
+      _ref7$environment = _ref7.environment,
+      environment = _ref7$environment === void 0 ? {} : _ref7$environment;
+    _classCallCheck(this, Individual);
     this.genome = Genome.from(genome);
-    const env = merge({
+    var env = merge({
       me: this
     }, environment);
     this.brain = new Brain({
-      sensors,
-      actions,
+      sensors: sensors,
+      actions: actions,
       genome: this.genome,
       environment: env
     });
     this.reproduce = {
       asexual: {
-        fission: (mutationRate = 1 / 1000) => new Individual({
-          sensors,
-          actions,
-          environment: env,
-          genome: Reproduction.genomeMutate(this.genome, mutationRate)
-        })
+        fission: function fission() {
+          var mutationRate = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 1 / 1000;
+          return new Individual({
+            sensors: sensors,
+            actions: actions,
+            environment: env,
+            genome: Reproduction.genomeMutate(_this3.genome, mutationRate)
+          });
+        }
       }
     };
   }
-  tick() {
-    return this.brain.tick();
-  }
-}
-
+  _createClass(Individual, [{
+    key: "tick",
+    value: function tick() {
+      return this.brain.tick();
+    }
+  }]);
+  return Individual;
+}();
 exports.Base = Base;
 exports.Brain = Brain;
 exports.Genome = Genome;
