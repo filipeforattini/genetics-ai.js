@@ -61,7 +61,7 @@ export class Brain {
     const activationFunction = this.activationFunction
 
     for (const vertex of Object.values(this.definitions.sensors)) {
-      let fn = this.sensors[vertex.name].tick || (() => 0)
+      let fn = this.sensors[vertex.name]?.tick || (() => 0)
       fn = fn.bind(env.me || this)
 
       vertex.tick = function () {
@@ -81,7 +81,7 @@ export class Brain {
     }
 
     for (const vertex of Object.values(this.definitions.actions)) {
-      let fn = this.actions[vertex.name].tick || (() => 0)
+      let fn = this.actions[vertex.name]?.tick || (() => 0)
       fn = fn.bind(env.me || this)
 
       vertex.tick = function () {

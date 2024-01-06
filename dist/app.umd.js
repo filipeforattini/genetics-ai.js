@@ -4357,8 +4357,8 @@
       actions = 1,
     } = {}) {
       // bias base
-      if (random(0, 10) < 4) {
-        const data = random(-4, 4);
+      if (random(0, 100) < 25) {
+        const data = random(-3, 3);
 
         if (random(0, 100) < 33) {
           return {
@@ -4647,7 +4647,7 @@
       const activationFunction = this.activationFunction;
 
       for (const vertex of Object.values(this.definitions.sensors)) {
-        let fn = this.sensors[vertex.name].tick || (() => 0);
+        let fn = this.sensors[vertex.name]?.tick || (() => 0);
         fn = fn.bind(env.me || this);
 
         vertex.tick = function () {
@@ -4667,7 +4667,7 @@
       }
 
       for (const vertex of Object.values(this.definitions.actions)) {
-        let fn = this.actions[vertex.name].tick || (() => 0);
+        let fn = this.actions[vertex.name]?.tick || (() => 0);
         fn = fn.bind(env.me || this);
 
         vertex.tick = function () {
@@ -4782,6 +4782,32 @@
     }
   }
 
+  class Reproduction {
+
+    static genomeMutate (genome, mutationRate = 1/1000) {
+      if (isString(genome)) {
+        const g = genome.split('')
+          .map(base => {
+            return Math.random() > mutationRate
+              ? base
+              : random(0, 31).toString(32).toUpperCase()
+          })
+          .join('');
+
+        return Genome.fromString(g)
+      }
+
+      const bases = genome.bases.map(base => {
+        return Math.random() > mutationRate
+          ? base
+          : Base.random()
+      });
+
+      return Genome.fromBases(bases)
+    }
+
+  }
+
   class Individual {
     constructor({
       genome = null,
@@ -4789,47 +4815,31 @@
       actions = [],
       environment = {},
     }) {
-      const g = Genome.from(genome);
-      this.genome = g;
+      this.genome = Genome.from(genome);
+      const env = merge$1({ me: this }, environment);
 
       this.brain = new Brain({
         sensors,
         actions,
-        genome: g,
-        environment: merge$1({}, environment, {
-          me: this,
-          individual: this,
-        }),
+        genome: this.genome,
+        environment: env,
       });
+
+      this.reproduce = {
+        asexual: {
+          fission: (mutationRate = 1/1000) => new Individual({
+            sensors,
+            actions,
+            environment: env,
+            genome: Reproduction.genomeMutate(this.genome, mutationRate),
+          })
+        }
+      };
     }
 
     tick() {
       return this.brain.tick()
     }
-  }
-
-  class Reproduction {
-
-    static genomeMutate (genome, rate = 1/1000) {
-      if (isString(genome)) {
-        return genome.split('')
-          .map(base => {
-            return Math.random() > rate
-              ? base
-              : random(0, 31).toString(32).toUpperCase()
-          })
-          .join('')
-      }
-
-      genome.bases.map(base => {
-        return Math.random() > rate
-          ? base
-          : Base.random()
-      });
-
-      return Genome.fromBases(genome.bases)
-    }
-
   }
 
   exports.Base = Base;

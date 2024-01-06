@@ -177,8 +177,8 @@ export class Base {
     actions = 1,
   } = {}) {
     // bias base
-    if (random(0, 10) < 4) {
-      const data = random(-4, 4)
+    if (random(0, 100) < 25) {
+      const data = random(-3, 3)
 
       if (random(0, 100) < 33) {
         return {

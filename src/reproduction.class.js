@@ -5,24 +5,26 @@ import { Genome } from "./genome.class"
 
 export class Reproduction {
 
-  static genomeMutate (genome, rate = 1/1000) {
+  static genomeMutate (genome, mutationRate = 1/1000) {
     if (isString(genome)) {
-      return genome.split('')
+      const g = genome.split('')
         .map(base => {
-          return Math.random() > rate
+          return Math.random() > mutationRate
             ? base
             : random(0, 31).toString(32).toUpperCase()
         })
         .join('')
+
+      return Genome.fromString(g)
     }
 
-    genome.bases.map(base => {
-      return Math.random() > rate
+    const bases = genome.bases.map(base => {
+      return Math.random() > mutationRate
         ? base
         : Base.random()
     })
 
-    return Genome.fromBases(genome.bases)
+    return Genome.fromBases(bases)
   }
 
 }

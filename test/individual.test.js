@@ -1,18 +1,8 @@
-import { Brain } from "../src/brain.class.js"
-import { Genome } from "../src/genome.class.js"
+import { Genome } from "../src/genome.class"
+import { Individual } from "../src/individual.class"
 
-describe('brain', () => {
-  test('simple heavly biased brain', () => {
-    /**
-     *   l0     l1     l2     l3
-     *  ──┴──────┴──────┴──────┴──
-     *   s0 ─── n0 ─┬──────── a0
-     *           ┌──┘
-     *   s1 ─┬─ n1
-     *       │   └──┐
-     *       └─ n2 ─┴─ n3 ─── a1
-     */
-    const brain = new Brain({
+describe('individual', () => {
+    const individual = new Individual({
       environment: { x: 1 },
       genome: Genome.fromBases([
         // l1
@@ -42,14 +32,9 @@ describe('brain', () => {
       ],
     })
 
-    const tick = brain.tick()
 
-    if (Object.values(tick).includes('a#0')) {
-      expect(tick['a#0']).toEqual('✓')
-    }
-
-    if (Object.values(tick).includes('a#1')) {
-      expect(tick['a#1']).toEqual('✗')
-    }
+  test('reproduce', () => {
+    const child = individual.reproduce.asexual.fission(1)
+    expect(individual.genome.encoded).not.toEqual(child.genome.encoded)
   })
 })
