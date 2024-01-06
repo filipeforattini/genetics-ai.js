@@ -4182,8 +4182,6 @@
 
   const fromBin = bin => parseInt(bin, 2);
   const fromBinToBase32 = bin => parseInt(bin, 2).toString(32);
-
-  const fromBase32 = b32 => parseInt(b32, 32);
   const fromBase32ToBin = b32 => parseInt(b32, 32).toString(2);
 
   class Base {
@@ -4823,9 +4821,5 @@
   exports.Individual = Individual;
   exports.Reproduction = Reproduction;
   exports.Vertex = Vertex;
-  exports.fromBase32 = fromBase32;
-  exports.fromBase32ToBin = fromBase32ToBin;
-  exports.fromBin = fromBin;
-  exports.fromBinToBase32 = fromBinToBase32;
 
 }));

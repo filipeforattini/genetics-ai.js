@@ -4176,8 +4176,6 @@ var sortBy$1 = sortBy;
 
 const fromBin = bin => parseInt(bin, 2);
 const fromBinToBase32 = bin => parseInt(bin, 2).toString(32);
-
-const fromBase32 = b32 => parseInt(b32, 32);
 const fromBase32ToBin = b32 => parseInt(b32, 32).toString(2);
 
 class Base {
@@ -4811,4 +4809,4 @@ class Individual {
   }
 }
 
-export { Base, Brain, Genome, Individual, Reproduction, Vertex, fromBase32, fromBase32ToBin, fromBin, fromBinToBase32 };
+export { Base, Brain, Genome, Individual, Reproduction, Vertex };

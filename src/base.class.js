@@ -1,10 +1,10 @@
 import { chunk, merge, random } from "lodash-es"
 
-export const fromBin = bin => parseInt(bin, 2)
-export const fromBinToBase32 = bin => parseInt(bin, 2).toString(32)
+const fromBin = bin => parseInt(bin, 2)
+const fromBinToBase32 = bin => parseInt(bin, 2).toString(32)
 
-export const fromBase32 = b32 => parseInt(b32, 32)
-export const fromBase32ToBin = b32 => parseInt(b32, 32).toString(2)
+const fromBase32 = b32 => parseInt(b32, 32)
+const fromBase32ToBin = b32 => parseInt(b32, 32).toString(2)
 
 export class Base {
   static charToBin(char) {
