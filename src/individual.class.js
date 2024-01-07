@@ -10,8 +10,6 @@ export class Individual {
     sensors = [],
     actions = [],
     environment = {},
-    childrenClass = Individual,
-    extraParams = {},
   }) {
     this.genome = Genome.from(genome)
     const env = merge({ me: this }, environment)
@@ -25,13 +23,7 @@ export class Individual {
 
     this.reproduce = {
       asexual: {
-        fission: (mutationRate = 1/1000) => new childrenClass({
-          sensors,
-          actions,
-          environment: env,
-          genome: Reproduction.genomeMutate(this.genome, mutationRate),
-          ...extraParams,
-        })
+        fission: (mutationRate = 1/1000) => Reproduction.genomeMutate(this.genome, mutationRate),
       }
     }
   }
