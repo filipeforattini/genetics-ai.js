@@ -35,6 +35,6 @@ describe('individual', () => {
 
   test('reproduce', () => {
     const child = individual.reproduce.asexual.fission(1)
-    expect(individual.genome.encoded).not.toEqual(child.genome.encoded)
+    expect(individual.genome.encoded).not.toEqual(child.encoded)
   })
 })
