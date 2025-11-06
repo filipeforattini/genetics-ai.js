@@ -1,30 +1,156 @@
 import { isString, random } from "lodash-es"
 
-import { Base } from "./base.class"
-import { Genome } from "./genome.class"
+import { Genome } from "./genome.class.js"
 
 export class Reproduction {
 
-  static genomeMutate (genome, mutationRate = 1/1000) {
-    if (isString(genome)) {
-      const g = genome.split('')
-        .map(base => {
-          return Math.random() > mutationRate
-            ? base
-            : random(0, 31).toString(32).toUpperCase()
-        })
-        .join('')
-
-      return Genome.fromString(g)
-    }
-
-    const bases = genome.bases.map(base => {
-      return Math.random() > mutationRate
-        ? base
-        : Base.random()
+  static genomeMutate(genome, options = {}) {
+    // Use binary mutation directly for better performance
+    const genomeObj = Genome.from(genome)
+    const cloned = genomeObj.clone()
+    
+    // Extract mutation parameters
+    const {
+      mutationRate = 0.001,
+      generation = 0,
+      adaptiveRate = false,
+      creepRate,
+      structuralRate,
+      maxGenomeSize = 2000,  // Limit genome growth (in bits)
+      maxActionId,            // Maximum valid action ID
+      maxNeuronId,            // Maximum valid neuron ID
+      maxSensorId             // Maximum valid sensor ID
+    } = options
+    
+    // Apply mutations with size limit
+    cloned.mutate(mutationRate, {
+      adaptiveRate,
+      generation,
+      creepRate: creepRate || mutationRate * 2,
+      structuralRate: structuralRate || mutationRate * 10,
+      maxSize: maxGenomeSize,
+      addRate: mutationRate * 5,     // Reduce add rate
+      removeRate: mutationRate * 5,   // Balance with remove rate
+      maxActionId,
+      maxNeuronId,
+      maxSensorId
     })
-
-    return Genome.fromBases(bases)
+    
+    return cloned
   }
 
+  static genomeFusion(genA, genB, options = {}) {
+    return ReproductionGenomeHandler.from({
+      ...options,
+      genome: genA,
+    })
+      .fusion(genB)
+      .mutate()
+      .get()
+  }
+
+  static genomeCrossover(genA, genB, options = {}) {
+    // Use binary crossover for better performance
+    const genomeA = Genome.from(genA)
+    const genomeB = Genome.from(genB)
+    
+    // Perform crossover
+    const [child1, child2] = genomeA.crossover(genomeB)
+    
+    // Apply mutations to children with ID limits
+    const mutationRate = options.mutationRate || 0.001
+    const mutationOptions = {
+      ...options,
+      maxActionId: options.maxActionId,
+      maxNeuronId: options.maxNeuronId,
+      maxSensorId: options.maxSensorId
+    }
+    child1.mutate(mutationRate, mutationOptions)
+    child2.mutate(mutationRate, mutationOptions)
+    
+    return [child1, child2]
+  }
 }
+
+export class ReproductionGenomeHandler {
+  constructor({
+    genome,
+    mutationRate = 1 / 1000,
+  }) {
+    this.genome = genome
+    this.mutationRate = mutationRate
+  }
+
+  static from(...args) {
+    return new ReproductionGenomeHandler(...args)
+  }
+
+  get() {
+    return this.genome
+  }
+
+  mutate({ rate = null } = {}) {
+    const mutationRate = rate ?? this.mutationRate
+    if (mutationRate === 0) return this
+
+    let mutations = 0
+    let encodedStr = this.genome.encoded
+    
+    // Only split if we actually need to mutate
+    let encoded = null
+
+    // Check mutations first
+    for (let i = 0; i < encodedStr.length; i++) {
+      if (Math.random() <= mutationRate) {
+        if (!encoded) encoded = encodedStr.split('')
+        encoded[i] = random(0, 31).toString(32).toUpperCase()
+        mutations++
+      }
+    }
+    
+    if (Math.random() <= mutationRate) {
+      if (!encoded) encoded = encodedStr.split('')
+      encoded.push(random(0, 31).toString(32).toUpperCase())
+      mutations++
+    }
+    
+    if (Math.random() <= mutationRate && encodedStr.length > 0) {
+      if (!encoded) encoded = encodedStr.split('')
+      encoded.pop()
+      mutations++
+    }
+
+    if (mutations > 0 && encoded) {
+      this.genome = Genome.fromString(encoded.join(''))
+    }
+    return this
+  }
+
+  fusion(genome) {
+    const bases = [].concat(this.genome.bases).concat(genome.bases)
+    this.genome = Genome.fromBases(bases)
+
+    return this
+  }
+
+  fissure(partsNumber = 2) {
+    let parts = []
+    const partSize = Math.max(1, Math.floor(this.genome.bases.length / partsNumber))
+
+    for (let i = 0; i < partsNumber; i++) {
+      const start = i * partSize
+      const end = start + partSize
+
+      if (i === partsNumber - 1) {
+        parts.push(this.genome.bases.slice(start))
+      } else {
+        parts.push(this.genome.bases.slice(start, end))
+      }
+    }
+
+    return parts.map(p => new ReproductionGenomeHandler({
+      genome: Genome.fromBases(p),
+      mutationRate: this.mutationRate,
+    }))
+  }
+} 

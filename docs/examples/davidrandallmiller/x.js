@@ -1,0 +1,7 @@
+import { Genome } from "../../src/index.js"
+
+const genome = Genome.fromString('803094030540C082080E803018090D90GB5C50K20292208086050780A094030540C082080E803018090D90GB5C50K202022080860507')
+// 7169a971754e88ee65e858c93ab5b7e9
+
+console.log(JSON.stringify(genome, null, 2))
+

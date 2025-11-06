@@ -1,1 +1,26 @@
+# Dependencies
 node_modules
+
+# Build output
+dist
+
+# Test coverage
+coverage
+
+# Champions and checkpoints (generated)
+docs/champions/*.json
+
+# Temporary files
+*.log
+*.tmp
+*.bak
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

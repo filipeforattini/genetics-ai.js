@@ -1,8 +1,6 @@
 import { sortBy } from "lodash-es"
 
-function dotProduct(a, b) {
-  return a.reduce((acc, v, i) => acc + v * b[i], 0)
-}
+// Removed - no longer needed with inline implementation
 
 export class Vertex {
   constructor(name, metadata = {}) {
@@ -13,6 +11,19 @@ export class Vertex {
     this.inMap = {}
     this.out = []
     this.outMap = {}
+    
+    // Pre-allocated arrays for performance
+    this._inputArrays = {
+      values: null,
+      weights: null,
+      size: 0
+    }
+    
+    // Cache system with generation tracking
+    this.cache = {
+      generation: -1,     // Last generation when calculated
+      value: 0           // Cached value
+    }
   }
 
   addIn(vertex, weight) {
@@ -58,30 +69,95 @@ export class Vertex {
     return JSON.stringify(this.toJSON(), null, 2)
   }
 
-  inputsTree(deph = 0, visited = {}) {
-    if (visited[this.name]) return []
+  inputsTree(depth = 0, visited = {}) {
+    // Prevent infinite recursion with cycle detection and depth limit
+    if (visited[this.name] || depth > 100) return []
 
     let pile = []
-    visited[this.name] = pile.push({ deph, vertex: this })
+    visited[this.name] = true
+    pile.push({ depth, vertex: this })
 
     for (const input of this.in) {
-      let subPile = input.vertex.inputsTree(deph + 1, visited)
-
-      subPile = subPile.filter(v => !visited[v.name])
+      const subPile = input.vertex.inputsTree(depth + 1, visited)
+      // Concat without filter since visited check is done at the start
       pile = pile.concat(subPile)
     }
 
-    return sortBy(pile, ['deph'])
+    return sortBy(pile, ['depth'])
   }
 
-  calculateInput() {
-    let values = [], weights = []
-
-    for (const { vertex, weight } of this.in) {
-      values.push(vertex.metadata.lastTick || 0)
-      weights.push(weight)
+  getCachedOrCalculate(currentGeneration) {
+    // Return cached value if already calculated this generation
+    if (this.cache.generation === currentGeneration) {
+      return this.cache.value
     }
-
-    return dotProduct(values, weights)
+    
+    // Mark as being calculated to prevent recursion
+    this.cache.generation = currentGeneration
+    
+    // Calculate new value
+    const value = this.tick ? this.tick() : 0
+    
+    // Update cache with the calculated value
+    this.cache.value = value
+    
+    return value
+  }
+  
+  calculateInput(currentGeneration) {
+    const len = this.in.length
+    
+    // Early return for no inputs
+    if (len === 0) return 0
+    
+    // Check if TypedArrays are available (browser and Node.js support)
+    const hasTypedArrays = typeof Float32Array !== 'undefined'
+    
+    if (hasTypedArrays) {
+      // Allocate or resize TypedArrays only when needed
+      if (!this._inputArrays.values || this._inputArrays.size < len) {
+        this._inputArrays.values = new Float32Array(len)
+        this._inputArrays.weights = new Float32Array(len)
+        this._inputArrays.size = len
+      }
+      
+      const values = this._inputArrays.values
+      const weights = this._inputArrays.weights
+      
+      // Fill arrays - use cached values if available
+      for (let i = 0; i < len; i++) {
+        const input = this.in[i]
+        // Use cached value from current generation if available
+        if (currentGeneration !== undefined && input.vertex.getCachedOrCalculate) {
+          values[i] = input.vertex.getCachedOrCalculate(currentGeneration)
+        } else {
+          values[i] = input.vertex.metadata.lastTick || 0
+        }
+        weights[i] = input.weight
+      }
+      
+      // Optimized dot product
+      let sum = 0
+      for (let i = 0; i < len; i++) {
+        sum += values[i] * weights[i]
+      }
+      
+      return sum
+    } else {
+      // Fallback for environments without TypedArrays
+      let sum = 0
+      for (let i = 0; i < len; i++) {
+        const input = this.in[i]
+        // Use cached value from current generation if available
+        let value
+        if (currentGeneration !== undefined && input.vertex.getCachedOrCalculate) {
+          value = input.vertex.getCachedOrCalculate(currentGeneration)
+        } else {
+          value = input.vertex.metadata.lastTick || 0
+        }
+        sum += value * input.weight
+      }
+      return sum
+    }
   }
 }

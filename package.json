@@ -1,6 +1,6 @@
 {
   "name": "genetics-ai.js",
-  "version": "2.1.6",
+  "version": "2.3.0",
   "description": "A Genetic Algorithm AI lib for JS",
   "main": "./dist/app.esm.js",
   "author": "filipeforattini",
@@ -8,8 +8,13 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "rollup -c",
-    "test": "node --experimental-vm-modules --no-warnings ./node_modules/jest/bin/jest.js ./test",
-    "prepare": "husky install"
+    "test": "node --experimental-vm-modules --no-warnings ./node_modules/jest/bin/jest.js ./test --coverage",
+    "prepare": "husky install",
+    "benchmark": "node --expose-gc benchmarks/comprehensive.benchmark.js",
+    "benchmark:v2v3": "node --expose-gc benchmarks/v2-vs-v3.benchmark.js",
+    "benchmark:quick": "node scripts/run-benchmarks.js --quick",
+    "benchmark:full": "node scripts/run-benchmarks.js --full",
+    "benchmark:html": "node scripts/run-benchmarks.js --html"
   },
   "devDependencies": {
     "@babel/core": "^7.23.7",
@@ -17,7 +22,11 @@
     "@rollup/plugin-babel": "^6.0.4",
     "@rollup/plugin-commonjs": "^25.0.7",
     "@rollup/plugin-node-resolve": "^15.2.3",
+    "canvas": "^2.11.2",
+    "chalk": "^5.3.0",
+    "commander": "^11.1.0",
     "husky": "^8.0.3",
+    "inquirer": "^9.2.12",
     "jest": "^29.7.0",
     "rollup": "^4.9.4",
     "rollup-plugin-filesize": "^10.0.0",

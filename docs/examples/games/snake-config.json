@@ -1,0 +1,10 @@
+{
+  "defaultFeatures": {
+    "memory": true,
+    "plasticity": true,
+    "learning": true,
+    "programmableNeurons": false,
+    "attributes": true,
+    "modules": false
+  }
+}

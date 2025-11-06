@@ -3,7 +3,6 @@ import { babel, getBabelOutputPlugin } from '@rollup/plugin-babel';
 import { uglify } from "rollup-plugin-uglify";
 import filesize from "rollup-plugin-filesize";
 import commonjs from '@rollup/plugin-commonjs';
-import globals from 'rollup-plugin-node-globals';
 import builtins from 'rollup-plugin-node-builtins';
 import nodePolyfills from 'rollup-plugin-node-polyfills';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
@@ -14,11 +13,11 @@ export default [
 
     output: {
       format: 'cjs',
-      file: './dist/app.cjs.min.js'
+      file: './dist/app.cjs.min.js',
+      inlineDynamicImports: true,
     },
 
     plugins: [
-      globals(),
       builtins(),
       nodePolyfills(),
       commonjs(),
@@ -47,11 +46,12 @@ export default [
 
     output: {
       format: 'cjs',
-      file: './dist/app.cjs.js'
+      file: './dist/app.cjs.js',
+      inlineDynamicImports: true,
     },
 
     plugins: [
-      globals(),
+      // globals(),
       builtins(),
       nodePolyfills(),
       commonjs(),
@@ -78,11 +78,12 @@ export default [
     output: {
       name: 'genetics',
       format: 'umd',
-      file: './dist/app.umd.js'
+      file: './dist/app.umd.js',
+      inlineDynamicImports: true,
     },
 
     plugins: [
-      globals(),
+      // globals(),
       builtins(),
       nodePolyfills(),
       commonjs(),
@@ -106,11 +107,12 @@ export default [
     output: {
       name: 'genetics',
       format: 'esm',
-      file: './dist/app.esm.js'
+      file: './dist/app.esm.js',
+      inlineDynamicImports: true,
     },
 
     plugins: [
-      globals(),
+      // globals(),
       builtins(),
       nodePolyfills(),
       commonjs(),
