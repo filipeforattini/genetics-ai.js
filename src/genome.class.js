@@ -85,20 +85,62 @@ export class Genome {
     return genome
   }
 
+  _ensureBaseCache() {
+    if (this._basesCache && this._basePositions) return
+
+    const bases = []
+    const positions = []
+    let position = 0
+    const totalBits = this.buffer.bitLength || (this.buffer.buffer.length * 8)
+    const advancedParsers = [
+      EvolvedNeuronBase,
+      ModuleBase,
+      MemoryCellBase,
+      PlasticityBase,
+      LearningRuleBase
+    ]
+
+    while (position < totalBits - 3) {
+      // PARSING PRIORITY: Try basic bases FIRST to avoid false positives!
+      // Basic bases (connection/bias) are much more common than advanced bases.
+      // Advanced parsers can false-positive on connection weights with certain bit patterns.
+      const base = Base.fromBitBuffer(this.buffer, position)
+      if (base) {
+        bases.push(base)
+        positions.push(position)
+        position += base.bitLength
+        continue
+      }
+
+      // Only try advanced parsers if basic parsing failed
+      let parsed = null
+      for (const Parser of advancedParsers) {
+        parsed = Parser.fromBitBuffer(this.buffer, position)
+        if (parsed) break
+      }
+
+      if (parsed) {
+        bases.push(parsed)
+        positions.push(position)
+        position += parsed.bitLength
+        continue
+      }
+
+      // Neither basic nor advanced parser matched - stop
+      break
+    }
+
+    this._basesCache = bases
+    this._basePositions = positions
+  }
+
   /**
    * Get bases (lazy parsing with cache)
    * Use this when you need ALL bases
    */
   getBases() {
-    if (this._basesCache) return this._basesCache
-
-    const bases = []
-    for (const base of this.iterBases()) {
-      bases.push(base)
-    }
-
-    this._basesCache = bases
-    return bases
+    this._ensureBaseCache()
+    return this._basesCache
   }
 
   /**
@@ -121,8 +163,16 @@ export class Genome {
     ]
 
     while (position < totalBits - 3) {  // Need at least 3 bits for type
-      let parsed = null
+      // PARSING PRIORITY: Try basic bases FIRST to avoid false positives!
+      const base = Base.fromBitBuffer(this.buffer, position)
+      if (base) {
+        yield base
+        position += base.bitLength
+        continue
+      }
 
+      // Only try advanced parsers if basic parsing failed
+      let parsed = null
       for (const Parser of advancedParsers) {
         parsed = Parser.fromBitBuffer(this.buffer, position)
         if (parsed) break
@@ -134,11 +184,8 @@ export class Genome {
         continue
       }
 
-      const base = Base.fromBitBuffer(this.buffer, position)
-      if (!base) break
-
-      yield base
-      position += base.bitLength
+      // Neither matched - stop
+      break
     }
   }
 
@@ -368,6 +415,7 @@ export class Genome {
    */
   mutate(mutationRate = 0.001, options = {}) {
     const totalBits = this.buffer.bitLength || (this.buffer.buffer.length * 8)
+    let currentBits = totalBits
     let mutations = 0
     
     // Extract mutation options with defaults
@@ -388,43 +436,82 @@ export class Genome {
       ? bitFlipRate * Math.exp(-generation / 500)  // Decay over time
       : bitFlipRate
     
+    // 🚀 BATCH RNG: use system RNG in chunks to slash per-bit overhead
+    const BIT_BATCH = 1024
+    const CHUNK_BITS = 32
+    const globalCrypto = typeof globalThis !== 'undefined' ? globalThis.crypto : undefined
+    const hasCrypto = !!(globalCrypto && typeof globalCrypto.getRandomValues === 'function')
+    const cryptoBuffer = hasCrypto ? new Uint32Array(BIT_BATCH) : null
+    const rngBatch = hasCrypto ? null : new Float32Array(BIT_BATCH)
+    const INV_2_POW_32 = 1 / 0x100000000
+    const popcount32 = value => {
+      value >>>= 0
+      let count = 0
+      while (value) {
+        value &= value - 1
+        count++
+      }
+      return count
+    }
+
     // 1. BIT-FLIP MUTATIONS (most common)
-    for (let i = 0; i < totalBits; i++) {
-      if (Math.random() < effectiveRate) {
-        const bit = this.buffer.getBit(i)
-        this.buffer.setBit(i, bit ? 0 : 1)
-        mutations++
+    for (let batchStart = 0; batchStart < totalBits; batchStart += BIT_BATCH) {
+      const batchEnd = Math.min(batchStart + BIT_BATCH, totalBits)
+      const batchLen = batchEnd - batchStart
+
+      if (hasCrypto) {
+        globalCrypto.getRandomValues(cryptoBuffer.subarray(0, batchLen))
+      } else {
+        for (let j = 0; j < batchLen; j++) {
+          rngBatch[j] = Math.random()
+        }
+      }
+
+      for (let offset = 0; offset < batchLen; offset += CHUNK_BITS) {
+        const chunkBits = Math.min(CHUNK_BITS, batchLen - offset)
+        let mask = 0
+
+        for (let j = 0; j < chunkBits; j++) {
+          const rand = hasCrypto
+            ? cryptoBuffer[offset + j] * INV_2_POW_32
+            : rngBatch[offset + j]
+          if (rand < effectiveRate) {
+            const shift = chunkBits - 1 - j
+            mask |= (1 << shift) >>> 0
+          }
+        }
+
+        if (mask) {
+          this.buffer.xorBits(batchStart + offset, chunkBits, mask >>> 0)
+          mutations += popcount32(mask)
+        }
       }
     }
     
     // 2. CREEP MUTATIONS (small weight adjustments)
     // Only apply to weight bits in connections
     if (Math.random() < creepRate) {
-      let position = 0
-      const totalBits = this.buffer.bitLength || (this.buffer.buffer.length * 8)
+      this._ensureBaseCache()
+      for (let i = 0; i < this._basesCache.length; i++) {
+        const base = this._basesCache[i]
+        if (base.type !== 'connection') continue
+        if (Math.random() >= creepRate) continue
 
-      while (position < totalBits - 3) {
-        const base = Base.fromBitBuffer(this.buffer, position)
-        if (!base) break
+        const position = this._basePositions[i]
+        const oldWeight = base.data || 0
+        const creep = Math.floor((Math.random() - 0.5) * 2 * maxCreep)
+        const newWeight = Math.max(0, Math.min(15, oldWeight + creep))
 
-        if (base.type === 'connection' && Math.random() < creepRate) {
-          const oldWeight = base.data || 0
-          const creep = Math.floor((Math.random() - 0.5) * 2 * maxCreep)
-          const newWeight = Math.max(0, Math.min(15, oldWeight + creep))
-
-          if (newWeight !== oldWeight) {
-            for (let b = 0; b < 4; b++) {
-              const bitValue = (newWeight >> b) & 1
-              this.buffer.setBit(position + 1 + b, bitValue)
-            }
-            mutations++
+        if (newWeight !== oldWeight) {
+          for (let b = 0; b < 4; b++) {
+            const bitValue = (newWeight >> b) & 1
+            this.buffer.setBit(position + 1 + b, bitValue)
           }
+          mutations++
         }
-
-        position += base.bitLength
       }
 
-      this._basesCache = null  // Clear cache after modifications
+      this._basesCache = null
       this._basePositions = null
     }
     
@@ -433,26 +520,30 @@ export class Genome {
     const {
       addRate = structuralRate,      // Rate to add new genes
       removeRate = structuralRate,    // Rate to remove genes
+      splitRate = structuralRate,     // Rate to split connection (add node)
       maxGrowth = 1,                 // Max bases to add per mutation
       maxShrink = 1,                 // Max bases to remove per mutation
       minSize = 100,                 // Minimum genome size in bits
       maxSize = 10000               // Maximum genome size in bits
     } = options
     
+    // SPLIT CONNECTION (add node) - NEAT style mutation
+    // This adds a new neuron by splitting an existing connection
+    if (Math.random() < splitRate && currentBits < maxSize) {
+      this.mutateSplitConnection({ maxNeuronId })
+      mutations++
+    }
+
     // ADD NEW BASES (grow genome) - but respect size limits!
     const getCurrentBaseCount = () => {
-      if (this._basesCache) return this._basesCache.length
-      let count = 0
-      for (const _ of this.iterBases()) {
-        count++
-      }
-      return count
+      this._ensureBaseCache()
+      return this._basesCache ? this._basesCache.length : 0
     }
 
     const currentBases = getCurrentBaseCount()
     const maxBasesAllowed = maxSize / 20  // Approximate bits per base
     
-    if (Math.random() < addRate && currentBases < maxBasesAllowed && totalBits < maxSize) {
+    if (Math.random() < addRate && currentBases < maxBasesAllowed && currentBits < maxSize) {
       const toAdd = Math.min(
         Math.ceil(Math.random() * maxGrowth),
         maxBasesAllowed - currentBases  // Don't exceed limit
@@ -464,26 +555,41 @@ export class Genome {
           weightRange: [0, 3]  // Start with small weights
         })
         this.buffer.append(newBase)
+        currentBits += newBase.bitLength || 0
         mutations++
       }
     }
     
     // REMOVE BASES (shrink genome)
-    if (Math.random() < removeRate && totalBits > minSize) {
+    if (Math.random() < removeRate && currentBits > minSize) {
+      this._ensureBaseCache()
       const toRemove = Math.ceil(Math.random() * maxShrink)
-      for (let i = 0; i < toRemove && totalBits > minSize; i++) {
-        // Remove approximately one base worth of bits
-        const bitsToRemove = 25  // Average base size
-        const newBitLength = Math.max(minSize, this.buffer.bitLength - bitsToRemove)
-        
-        // Resize buffer
-        const newByteLength = Math.ceil(newBitLength / 8)
-        const newBuffer = new Uint8Array(newByteLength)
-        newBuffer.set(this.buffer.buffer.subarray(0, newByteLength))
-        this.buffer.buffer = newBuffer
-        this.buffer.bitLength = newBitLength
+
+      for (let i = 0; i < toRemove && this._basesCache.length > 0; i++) {
+        if (currentBits <= minSize) break
+        const idx = Math.floor(Math.random() * this._basesCache.length)
+        const base = this._basesCache[idx]
+        const position = this._basePositions[idx]
+        const end = position + base.bitLength
+        if (currentBits - base.bitLength < minSize) break
+
+        const newBuffer = new BitBuffer()
+        if (position > 0) {
+          newBuffer.append(this.buffer.slice(0, position))
+        }
+        if (end < currentBits) {
+          newBuffer.append(this.buffer.slice(end, currentBits))
+        }
+
+        this.buffer = newBuffer
+        currentBits = newBuffer.bitLength || (newBuffer.buffer.length * 8)
         mutations++
+        this._basesCache.splice(idx, 1)
+        this._basePositions.splice(idx, 1)
       }
+
+      this._basesCache = null
+      this._basePositions = null
     }
     
     // Clear cache and sanitize if mutated
@@ -497,6 +603,304 @@ export class Genome {
     return this
   }
   
+  /**
+   * Split a connection by inserting a new neuron (NEAT-style mutation)
+   * A -> B becomes A -> NewNeuron -> B
+   * Preserves the weight of A -> NewNeuron
+   * Sets NewNeuron -> B to 'identity' (max weight)
+   */
+  mutateSplitConnection(options = {}) {
+    const { maxNeuronId = 511 } = options
+    
+    // 1. Get all bases and map used neuron IDs
+    this._ensureBaseCache()
+    if (!this._basesCache || this._basesCache.length === 0) return this
+    
+    const bases = this._basesCache
+    const connections = []
+    const usedNeuronIds = new Set()
+    
+    for (let i = 0; i < bases.length; i++) {
+      const base = bases[i]
+      if (base.type === 'connection') {
+        connections.push({ base, index: i })
+        if (base.source.type === 'neuron') usedNeuronIds.add(base.source.id)
+        if (base.target.type === 'neuron') usedNeuronIds.add(base.target.id)
+      } else if (base.type === 'bias' && base.target.type === 'neuron') {
+        usedNeuronIds.add(base.target.id)
+      }
+    }
+    
+    if (connections.length === 0) return this
+    
+    // 2. Find a free neuron ID
+    // Try to find one randomly first for performance
+    let newNeuronId = -1
+    for (let i = 0; i < 20; i++) {
+      const id = Math.floor(Math.random() * (maxNeuronId + 1))
+      if (!usedNeuronIds.has(id)) {
+        newNeuronId = id
+        break
+      }
+    }
+    
+    // If random search failed, linear search
+    if (newNeuronId === -1) {
+      for (let id = 0; id <= maxNeuronId; id++) {
+        if (!usedNeuronIds.has(id)) {
+          newNeuronId = id
+          break
+        }
+      }
+    }
+    
+    // If genome is full (all neuron IDs used), abort
+    if (newNeuronId === -1) return this
+    
+    // 3. Pick a random connection to split
+    const splitTarget = connections[Math.floor(Math.random() * connections.length)]
+    const oldConn = splitTarget.base
+    const splitIndex = splitTarget.index
+    const splitPos = this._basePositions[splitIndex]
+    
+    // 4. Create new bases
+    // Connection 1: Source -> NewNeuron (Weight = OldWeight)
+    const conn1 = {
+      type: 'connection',
+      data: oldConn.data, // Preserve weight
+      source: { ...oldConn.source },
+      target: { type: 'neuron', id: newNeuronId }
+    }
+    
+    // Connection 2: NewNeuron -> Target (Weight = Max/Identity)
+    // We use weight 15 (max) to simulate "identity" or strong passthrough
+    const conn2 = {
+      type: 'connection',
+      data: 15, 
+      source: { type: 'neuron', id: newNeuronId },
+      target: { ...oldConn.target }
+    }
+    
+    // Bias for NewNeuron (initialized to 0)
+    const newBias = {
+      type: 'bias',
+      data: 0,
+      target: { type: 'neuron', id: newNeuronId }
+    }
+    
+    // 5. Rebuild genome buffer
+    // This is expensive but correct. Ideally we'd manipulate bits directly.
+    const newBuffer = new BitBuffer()
+    
+    // Append everything before the split connection
+    if (splitPos > 0) {
+      newBuffer.append(this.buffer.slice(0, splitPos))
+    }
+    
+    // Skip the old connection (it's "removed")
+    // Append new bases
+    newBuffer.append(Base.toBitBuffer(conn1))
+    newBuffer.append(Base.toBitBuffer(conn2))
+    newBuffer.append(Base.toBitBuffer(newBias))
+    
+    // Append everything after the split connection
+    const splitEnd = splitPos + oldConn.bitLength
+    const totalBits = this.buffer.bitLength || (this.buffer.buffer.length * 8)
+    if (splitEnd < totalBits) {
+      newBuffer.append(this.buffer.slice(splitEnd, totalBits))
+    }
+    
+    // Replace buffer
+    this.buffer = newBuffer
+    this._basesCache = null
+    this._basePositions = null
+
+    return this
+  }
+
+  /**
+   * Mutate a single random connection weight
+   * NEAT-style: 20% chance of new random value, 80% perturbation
+   * @param {Object} options - Mutation options
+   * @returns {Genome} this for chaining
+   */
+  mutateWeights(options = {}) {
+    const {
+      newValueProba = 0.2,    // 20% chance of completely new weight
+      smallRange = 0.01,      // Small perturbation range (1% of max)
+      largeRange = 1.0        // Large perturbation range (100% of max)
+    } = options
+
+    this._ensureBaseCache()
+    if (!this._basesCache || this._basesCache.length === 0) return this
+
+    // Find all connections
+    const connections = []
+    for (let i = 0; i < this._basesCache.length; i++) {
+      const base = this._basesCache[i]
+      if (base.type === 'connection') {
+        connections.push({ base, index: i, position: this._basePositions[i] })
+      }
+    }
+
+    if (connections.length === 0) return this
+
+    // Pick random connection
+    const target = connections[Math.floor(Math.random() * connections.length)]
+    const oldWeight = target.base.data || 0
+
+    let newWeight
+    if (Math.random() < newValueProba) {
+      // 20%: completely new random weight [0, 15]
+      newWeight = Math.floor(Math.random() * 16)
+    } else {
+      // 80%: perturbation (75% small, 25% large)
+      const range = Math.random() < 0.75 ? smallRange : largeRange
+      const delta = (Math.random() - 0.5) * 2 * range * 15
+      newWeight = Math.max(0, Math.min(15, Math.round(oldWeight + delta)))
+    }
+
+    if (newWeight !== oldWeight) {
+      // Update weight bits directly in buffer (bits 1-4 in connection base)
+      const position = target.position
+      // Connection format: [weight:4][type:1][source:10][target:10]
+      // Weight is in bits 1-4 (0 is type bit)
+      const config = (newWeight & 0b1111) << 1 | 0  // type=0 for connection
+      this.buffer.writeBits(config, 5, position)
+
+      // Invalidate cache
+      this._basesCache = null
+      this._basePositions = null
+    }
+
+    return this
+  }
+
+  /**
+   * Mutate a single random bias value
+   * NEAT-style: 20% chance of new random value, 80% perturbation
+   * @param {Object} options - Mutation options
+   * @returns {Genome} this for chaining
+   */
+  mutateBiases(options = {}) {
+    const {
+      newValueProba = 0.2,    // 20% chance of completely new bias
+      smallRange = 0.01,      // Small perturbation range
+      largeRange = 1.0        // Large perturbation range
+    } = options
+
+    this._ensureBaseCache()
+    if (!this._basesCache || this._basesCache.length === 0) return this
+
+    // Find all biases
+    const biases = []
+    for (let i = 0; i < this._basesCache.length; i++) {
+      const base = this._basesCache[i]
+      if (base.type === 'bias') {
+        biases.push({ base, index: i, position: this._basePositions[i] })
+      }
+    }
+
+    if (biases.length === 0) return this
+
+    // Pick random bias
+    const target = biases[Math.floor(Math.random() * biases.length)]
+    const oldBias = target.base.data || 0
+
+    let newBias
+    if (Math.random() < newValueProba) {
+      // 20%: completely new random bias [-6, 7]
+      newBias = Math.floor(Math.random() * 14) - 6
+    } else {
+      // 80%: perturbation
+      const range = Math.random() < 0.75 ? smallRange : largeRange
+      const delta = (Math.random() - 0.5) * 2 * range * 14
+      newBias = Math.max(-6, Math.min(7, Math.round(oldBias + delta)))
+    }
+
+    // Avoid -7 which conflicts with 'V' pattern
+    if (newBias === -7) newBias = -6
+
+    if (newBias !== oldBias) {
+      // Update bias bits directly in buffer
+      const position = target.position
+      // Bias format: [abs:3][sign:1][type:1][target:10]
+      const absData = Math.abs(newBias) & 0b111
+      const sign = newBias < 0 ? 1 : 0
+      const config = (absData << 2) | (sign << 1) | 1  // type=1 for bias
+      this.buffer.writeBits(config, 5, position)
+
+      // Invalidate cache
+      this._basesCache = null
+      this._basePositions = null
+    }
+
+    return this
+  }
+
+  /**
+   * Add a new random connection to the genome
+   * @param {Object} options - Options for connection generation
+   * @returns {Genome} this for chaining
+   */
+  mutateAddConnection(options = {}) {
+    const {
+      maxSensorId = 511,
+      maxNeuronId = 511,
+      maxActionId = 511,
+      maxSize = 10000  // Max genome size in bits
+    } = options
+
+    const currentBits = this.buffer.bitLength || (this.buffer.buffer.length * 8)
+    if (currentBits >= maxSize) return this
+
+    // Source: sensors or neurons (not actions)
+    const sourceType = Math.random() < 0.5 ? 'sensor' : 'neuron'
+    const sourceMaxId = sourceType === 'sensor' ? maxSensorId : maxNeuronId
+    const sourceId = Math.floor(Math.random() * (sourceMaxId + 1))
+
+    // Target: neurons or actions (not sensors)
+    const targetType = Math.random() < 0.5 ? 'neuron' : 'action'
+    const targetMaxId = targetType === 'neuron' ? maxNeuronId : maxActionId
+    const targetId = Math.floor(Math.random() * (targetMaxId + 1))
+
+    // Create new connection with random weight
+    const newConn = Base.toBitBuffer({
+      type: 'connection',
+      data: Math.floor(Math.random() * 16),  // Random weight [0, 15]
+      source: { type: sourceType, id: sourceId },
+      target: { type: targetType, id: targetId }
+    })
+
+    this.buffer.append(newConn)
+    this._basesCache = null
+    this._basePositions = null
+
+    return this
+  }
+
+  /**
+   * Count the number of unique neurons used in the genome
+   * @returns {number} Number of unique neuron IDs
+   */
+  countNeurons() {
+    this._ensureBaseCache()
+    if (!this._basesCache) return 0
+
+    const neuronIds = new Set()
+
+    for (const base of this._basesCache) {
+      if (base.type === 'connection') {
+        if (base.source.type === 'neuron') neuronIds.add(base.source.id)
+        if (base.target.type === 'neuron') neuronIds.add(base.target.id)
+      } else if (base.type === 'bias' && base.target.type === 'neuron') {
+        neuronIds.add(base.target.id)
+      }
+    }
+
+    return neuronIds.size
+  }
+
   /**
    * Sanitize genome to fix V conflicts after mutation
    * If a bias accidentally becomes -7 (creates 'V'), change it to -6
@@ -594,22 +998,17 @@ export class Genome {
       case 'single': {
         // Single-point crossover (traditional)
         const crossPoint = Math.floor(minBits / 2)
-        
-        // Child 1: first half of parent1, second half of parent2
-        for (let i = 0; i < crossPoint; i++) {
-          genome1.buffer.writeBits(this.buffer.getBit(i), 1)
-        }
-        for (let i = crossPoint; i < bits2; i++) {
-          genome1.buffer.writeBits(other.buffer.getBit(i), 1)
-        }
-        
-        // Child 2: first half of parent2, second half of parent1
-        for (let i = 0; i < crossPoint; i++) {
-          genome2.buffer.writeBits(other.buffer.getBit(i), 1)
-        }
-        for (let i = crossPoint; i < bits1; i++) {
-          genome2.buffer.writeBits(this.buffer.getBit(i), 1)
-        }
+
+        const child1Buffer = new BitBuffer()
+        child1Buffer.append(this.buffer.slice(0, crossPoint))
+        child1Buffer.append(other.buffer.slice(crossPoint, bits2))
+
+        const child2Buffer = new BitBuffer()
+        child2Buffer.append(other.buffer.slice(0, crossPoint))
+        child2Buffer.append(this.buffer.slice(crossPoint, bits1))
+
+        genome1.buffer = child1Buffer
+        genome2.buffer = child2Buffer
         break
       }
       
@@ -617,36 +1016,60 @@ export class Genome {
         // Two-point crossover
         const point1 = Math.floor(minBits * 0.33)
         const point2 = Math.floor(minBits * 0.67)
-        
-        for (let i = 0; i < maxBits; i++) {
-          const bit1 = i < bits1 ? this.buffer.getBit(i) : 0
-          const bit2 = i < bits2 ? other.buffer.getBit(i) : 0
-          
-          if (i < point1 || i >= point2) {
-            genome1.buffer.writeBits(bit1, 1)
-            genome2.buffer.writeBits(bit2, 1)
-          } else {
-            genome1.buffer.writeBits(bit2, 1)
-            genome2.buffer.writeBits(bit1, 1)
-          }
-        }
+
+        const aSegments = [
+          this.buffer.slice(0, point1),
+          this.buffer.slice(point1, point2),
+          this.buffer.slice(point2, bits1)
+        ]
+        const bSegments = [
+          other.buffer.slice(0, point1),
+          other.buffer.slice(point1, point2),
+          other.buffer.slice(point2, bits2)
+        ]
+
+        const child1Buffer = new BitBuffer()
+        child1Buffer.append(aSegments[0])
+        child1Buffer.append(bSegments[1])
+        child1Buffer.append(aSegments[2])
+
+        const child2Buffer = new BitBuffer()
+        child2Buffer.append(bSegments[0])
+        child2Buffer.append(aSegments[1])
+        child2Buffer.append(bSegments[2])
+
+        genome1.buffer = child1Buffer
+        genome2.buffer = child2Buffer
         break
       }
       
       case 'uniform':
       default: {
-        // Uniform crossover (50% chance from each parent)
-        // Best for maintaining diversity
-        for (let i = 0; i < maxBits; i++) {
-          const bit1 = i < bits1 ? this.buffer.getBit(i) : 0
-          const bit2 = i < bits2 ? other.buffer.getBit(i) : 0
-          
-          if (Math.random() < 0.5) {
-            genome1.buffer.writeBits(bit1, 1)
-            genome2.buffer.writeBits(bit2, 1)
-          } else {
-            genome1.buffer.writeBits(bit2, 1)
-            genome2.buffer.writeBits(bit1, 1)
+        const blockSize = 32
+        for (let i = 0; i < maxBits; i += blockSize) {
+          const strategy = Math.random()
+          const nextBlock = Math.min(blockSize, maxBits - i)
+          if (strategy < 0.25) {
+            genome1.buffer.append(this.buffer.slice(i, i + nextBlock))
+            genome2.buffer.append(other.buffer.slice(i, i + nextBlock))
+            continue
+          }
+          if (strategy < 0.5) {
+            genome1.buffer.append(other.buffer.slice(i, i + nextBlock))
+            genome2.buffer.append(this.buffer.slice(i, i + nextBlock))
+            continue
+          }
+          for (let bit = 0; bit < nextBlock; bit++) {
+            const idx = i + bit
+            const bit1 = idx < bits1 ? this.buffer.getBit(idx) : 0
+            const bit2 = idx < bits2 ? other.buffer.getBit(idx) : 0
+            if (Math.random() < 0.5) {
+              genome1.buffer.writeBits(bit1, 1)
+              genome2.buffer.writeBits(bit2, 1)
+            } else {
+              genome1.buffer.writeBits(bit2, 1)
+              genome2.buffer.writeBits(bit1, 1)
+            }
           }
         }
         break
@@ -688,7 +1111,7 @@ export class Genome {
    * Get base at specific index (O(1) with position cache)
    */
   getBase(index) {
-    if (!this._basePositions) this.getBases()
+    this._ensureBaseCache()
     if (index < 0 || index >= this._basePositions.length) return null
     
     const position = this._basePositions[index]

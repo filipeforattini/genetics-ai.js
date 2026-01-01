@@ -106,58 +106,53 @@ export class Vertex {
   
   calculateInput(currentGeneration) {
     const len = this.in.length
-    
+
     // Early return for no inputs
     if (len === 0) return 0
-    
-    // Check if TypedArrays are available (browser and Node.js support)
-    const hasTypedArrays = typeof Float32Array !== 'undefined'
-    
-    if (hasTypedArrays) {
-      // Allocate or resize TypedArrays only when needed
-      if (!this._inputArrays.values || this._inputArrays.size < len) {
-        this._inputArrays.values = new Float32Array(len)
-        this._inputArrays.weights = new Float32Array(len)
-        this._inputArrays.size = len
-      }
-      
-      const values = this._inputArrays.values
-      const weights = this._inputArrays.weights
-      
-      // Fill arrays - use cached values if available
-      for (let i = 0; i < len; i++) {
-        const input = this.in[i]
-        // Use cached value from current generation if available
-        if (currentGeneration !== undefined && input.vertex.getCachedOrCalculate) {
-          values[i] = input.vertex.getCachedOrCalculate(currentGeneration)
-        } else {
-          values[i] = input.vertex.metadata.lastTick || 0
-        }
-        weights[i] = input.weight
-      }
-      
-      // Optimized dot product
-      let sum = 0
-      for (let i = 0; i < len; i++) {
-        sum += values[i] * weights[i]
-      }
-      
-      return sum
-    } else {
-      // Fallback for environments without TypedArrays
-      let sum = 0
-      for (let i = 0; i < len; i++) {
-        const input = this.in[i]
-        // Use cached value from current generation if available
-        let value
-        if (currentGeneration !== undefined && input.vertex.getCachedOrCalculate) {
-          value = input.vertex.getCachedOrCalculate(currentGeneration)
-        } else {
-          value = input.vertex.metadata.lastTick || 0
-        }
-        sum += value * input.weight
-      }
-      return sum
+
+    // TypedArrays always available in Node.js and modern browsers
+    // Allocate or resize only when needed
+    if (!this._inputArrays.values || this._inputArrays.size < len) {
+      this._inputArrays.values = new Float32Array(len)
+      this._inputArrays.weights = new Float32Array(len)
+      this._inputArrays.size = len
     }
+
+    const values = this._inputArrays.values
+    const weights = this._inputArrays.weights
+    const inputs = this.in
+
+    // Fast path: when currentGeneration is provided (normal Brain.tick() usage)
+    // Slow path: fallback to metadata.lastTick (for standalone vertex testing)
+    const useCache = currentGeneration !== undefined
+
+    // Fill arrays
+    for (let i = 0; i < len; i++) {
+      const input = inputs[i]
+      values[i] = useCache
+        ? input.vertex.getCachedOrCalculate(currentGeneration)
+        : (input.vertex.metadata.lastTick || 0)
+      weights[i] = input.weight
+    }
+
+    // Optimized dot product with loop unrolling
+    let sum = 0
+    let i = 0
+    const len4 = len & ~3
+
+    // Process 4 elements at a time
+    for (; i < len4; i += 4) {
+      sum += values[i] * weights[i] +
+             values[i + 1] * weights[i + 1] +
+             values[i + 2] * weights[i + 2] +
+             values[i + 3] * weights[i + 3]
+    }
+
+    // Handle remainder
+    for (; i < len; i++) {
+      sum += values[i] * weights[i]
+    }
+
+    return sum
   }
 }

@@ -4,6 +4,29 @@ import { Brain } from "./brain.class.js"
 import { Genome } from "./genome.class.js"
 import { Reproduction } from "./reproduction.class.js"
 
+const hookBindCache = typeof WeakMap !== 'undefined' ? new WeakMap() : null
+
+function getBoundHook(fn, context) {
+  if (typeof fn !== 'function') return fn
+  if (!context || (typeof context !== 'object' && typeof context !== 'function') || !hookBindCache) {
+    return fn.bind(context)
+  }
+
+  let contextMap = hookBindCache.get(fn)
+  if (!contextMap) {
+    contextMap = new WeakMap()
+    hookBindCache.set(fn, contextMap)
+  }
+
+  let bound = contextMap.get(context)
+  if (!bound) {
+    bound = fn.bind(context)
+    contextMap.set(context, bound)
+  }
+
+  return bound
+}
+
 export class Individual {
   constructor({
     genome = null,
@@ -70,9 +93,11 @@ export class Individual {
   }
 
   setupHooks () {
+    const context = this.environment.me ?? this
     for (const name of Object.keys(this.hooks)) {
       const fn = this.hooks[name]
-      this.hooks[name] = fn.bind(this.environment.me ?? this)
+      if (typeof fn !== 'function') continue
+      this.hooks[name] = getBoundHook(fn, context)
     }
   }
 
@@ -86,18 +111,17 @@ export class Individual {
   }
 
   tick() {
+    // Hooks are already bound in setupHooks() - call directly
     if (this.hooks.beforeTick) {
-      const beforeTickHook = this.hooks.beforeTick.bind(this)
-      beforeTickHook(this)
+      this.hooks.beforeTick(this)
     }
 
     const result = this.brain.tick()
 
     if (this.hooks.afterTick) {
-      const afterTickHook = this.hooks.afterTick.bind(this)
-      afterTickHook(this)
+      this.hooks.afterTick(this)
     }
-    
+
     return result
   }
   

@@ -1,4 +1,4 @@
-import { isString, random } from "lodash-es"
+import { random } from "lodash-es"
 
 import { Genome } from "./genome.class.js"
 
@@ -53,10 +53,10 @@ export class Reproduction {
     // Use binary crossover for better performance
     const genomeA = Genome.from(genA)
     const genomeB = Genome.from(genB)
-    
+
     // Perform crossover
     const [child1, child2] = genomeA.crossover(genomeB)
-    
+
     // Apply mutations to children with ID limits
     const mutationRate = options.mutationRate || 0.001
     const mutationOptions = {
@@ -67,8 +67,71 @@ export class Reproduction {
     }
     child1.mutate(mutationRate, mutationOptions)
     child2.mutate(mutationRate, mutationOptions)
-    
+
     return [child1, child2]
+  }
+
+  /**
+   * NEAT-style multi-round mutation
+   * Inspired by Pendulum-NEAT: multiple rounds of weight/bias mutations,
+   * followed by structural mutations (add node, add connection)
+   *
+   * @param {Genome|string} genome - The genome to mutate
+   * @param {Object} options - Mutation options
+   * @returns {Genome} Mutated genome clone
+   */
+  static multiRoundMutate(genome, options = {}) {
+    const {
+      rounds = 4,                    // Number of weight/bias mutation rounds
+      weightMutationProba = 0.25,    // 25% chance per round to mutate weights
+      biasMutationProba = 0.25,      // 25% chance per round to mutate biases
+      newNodeProba = 0.05,           // 5% chance to add new node (structural)
+      newConnectionProba = 0.80,     // 80% chance to add new connection (structural)
+      maxHiddenNodes = 30,           // Maximum hidden neurons allowed
+      maxSensorId = 511,
+      maxNeuronId = 511,
+      maxActionId = 511,
+      maxSize = 10000,               // Max genome size in bits
+      // Weight/bias mutation sub-options
+      newValueProba = 0.2,           // 20% chance of completely new value
+      smallRange = 0.01,             // Small perturbation range
+      largeRange = 1.0               // Large perturbation range
+    } = options
+
+    const genomeObj = Genome.from(genome).clone()
+
+    // Phase 1: Multiple rounds of weight/bias mutations
+    for (let round = 0; round < rounds; round++) {
+      if (Math.random() < weightMutationProba) {
+        if (Math.random() < 0.5) {
+          // Mutate weights
+          genomeObj.mutateWeights({ newValueProba, smallRange, largeRange })
+        } else {
+          // Mutate biases
+          genomeObj.mutateBiases({ newValueProba, smallRange, largeRange })
+        }
+      }
+    }
+
+    // Phase 2: Structural mutations (once per generation)
+    const currentNeuronCount = genomeObj.countNeurons()
+
+    // Add new node (split connection) - only if below max neurons
+    if (Math.random() < newNodeProba && currentNeuronCount < maxHiddenNodes) {
+      genomeObj.mutateSplitConnection({ maxNeuronId })
+    }
+
+    // Add new connection
+    if (Math.random() < newConnectionProba) {
+      genomeObj.mutateAddConnection({
+        maxSensorId,
+        maxNeuronId,
+        maxActionId,
+        maxSize
+      })
+    }
+
+    return genomeObj
   }
 }
 

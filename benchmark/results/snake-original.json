@@ -1,0 +1,15 @@
+{
+  "timestamp": "2025-11-16T16:34:59.734Z",
+  "config": {
+    "population": 100,
+    "generations": 50,
+    "gridSize": 10,
+    "maxSteps": 500
+  },
+  "results": {
+    "totalTime": "544.173",
+    "timePerGeneration": "10.883",
+    "bestFitness": "-Infinity",
+    "avgFitness": "NaN"
+  }
+}

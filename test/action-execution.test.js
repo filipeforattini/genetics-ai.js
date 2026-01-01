@@ -45,11 +45,12 @@ describe('Action Execution - Critical Bug Tests', () => {
   }
 
   test('should execute only ONE action per tick, not all actions', () => {
-    const genome = Genome.random(20, {
-      sensors: 1,
-      neurons: 3,
-      actions: 2
-    })
+    // Use explicit genome with guaranteed action connections
+    // Random genomes might not have any connections to actions!
+    const genome = Genome.fromBases([
+      { type: 'connection', data: 10, source: { type: 'sensor', id: 0 }, target: { type: 'action', id: 0 } },
+      { type: 'connection', data: 5, source: { type: 'sensor', id: 0 }, target: { type: 'action', id: 1 } }
+    ])
 
     const ind = new TestIndividual({ genome })
 
@@ -139,11 +140,12 @@ describe('Action Execution - Critical Bug Tests', () => {
       }
     }
 
-    const genome = Genome.random(20, {
-      sensors: 1,
-      neurons: 3,
-      actions: 2
-    })
+    // Use explicit genome with guaranteed sensor→action connection
+    // Random genomes might not have any connections to actions, so sensors might not be read!
+    const genome = Genome.fromBases([
+      { type: 'connection', data: 10, source: { type: 'sensor', id: 0 }, target: { type: 'action', id: 0 } },
+      { type: 'connection', data: 5, source: { type: 'sensor', id: 0 }, target: { type: 'action', id: 1 } }
+    ])
 
     const ind = new SensorTrackingInd({ genome })
 

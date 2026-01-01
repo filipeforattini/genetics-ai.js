@@ -185,6 +185,40 @@ export class BitBuffer {
     
     return (this.buffer[byteIndex] >> bitIndex) & 1
   }
+  
+  /**
+   * XOR a contiguous range of bits with a mask (up to 32 bits)
+   * @param {number} start - Starting bit index
+   * @param {number} bits - Number of bits to flip
+   * @param {number} mask - Bit mask (MSB corresponds to start)
+   */
+  xorBits(start, bits, mask) {
+    if (bits <= 0 || mask === 0) return
+    
+    let normalizedMask
+    if (bits >= 32) {
+      normalizedMask = mask >>> 0
+    } else {
+      normalizedMask = mask & ((1 << bits) - 1)
+    }
+    
+    let processed = 0
+    while (processed < bits) {
+      const bitPos = start + processed
+      const byteIndex = bitPos >> 3
+      if (byteIndex >= this.buffer.length) break
+      
+      const bitOffset = bitPos & 7
+      const bitsHere = Math.min(bits - processed, 8 - bitOffset)
+      const maskShift = bits - processed - bitsHere
+      const segmentMask = (normalizedMask >>> maskShift) & ((1 << bitsHere) - 1)
+      const targetShift = 8 - bitOffset - bitsHere
+      
+      this.buffer[byteIndex] ^= segmentMask << targetShift
+      
+      processed += bitsHere
+    }
+  }
 
   /**
    * Convert to base32 string

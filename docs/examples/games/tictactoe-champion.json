@@ -1,0 +1,12 @@
+{
+  "genome": "U0001S0203U0405M0607S0809M0A0BK0CREURF0D1MTM0E0FK0G0HO0I00S0K02G0109G8G0NI090A40N0FG0D02M010A",
+  "stats": {
+    "wins": 10,
+    "losses": 0,
+    "draws": 0,
+    "invalidMoves": 1
+  },
+  "generation": 24,
+  "level": 1,
+  "timestamp": "2026-01-01T04:27:45.362Z"
+}

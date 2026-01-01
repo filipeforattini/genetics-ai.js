@@ -397,6 +397,23 @@ function fillGenerationWithAdvancedBases(gen, context, { reset = true } = {}) {
 }
 
 class SnakeAI extends Individual {
+  // ⚡ PERFORMANCE: Static direction mappings (evita recriação e lookups)
+  static DIRECTION_VECTORS = {
+    up: { dx: 0, dy: -1 },
+    down: { dx: 0, dy: 1 },
+    left: { dx: -1, dy: 0 },
+    right: { dx: 1, dy: 0 }
+  }
+
+  static DIRECTION_ORDER = ['up', 'right', 'down', 'left']
+
+  static DIRECTION_INDEX = {
+    up: 0,
+    right: 1,
+    down: 2,
+    left: 3
+  }
+
   constructor(options) {
     super({
       ...options,
@@ -479,6 +496,15 @@ class SnakeAI extends Individual {
     this._spatialCacheStamp = -1
     this.activeGridSize = GRID_SIZE
     this.lastGridSizeUsed = GRID_SIZE
+
+    // ⚡ PERFORMANCE: Cache direction index para evitar indexOf() repetidos
+    this.directionIndex = 0  // up=0, right=1, down=2, left=3
+
+    // Cache para sensores que mudam raramente
+    this._cachedWallDistances = null
+    this._cachedWallDistancesStamp = -1
+    this._corridorCache = null
+    this._localFreeCache = { radius1: null, radius2: null, stamp: -1 }
   }
 
   applyCurriculumGrid() {
@@ -502,6 +528,7 @@ class SnakeAI extends Individual {
     this.snake = [{ ...head }, ...body.map(seg => ({ ...seg }))]
     this.head = this.snake[0]
     this.direction = 'up'
+    this.directionIndex = 0  // ⚡ PERFORMANCE: Cache direction index (up=0)
 
     // ⚡ PERFORMANCE: O(1) lookup for snake positions
     this.snakeSet = new Set(this.snake.map(seg => `${seg.x},${seg.y}`))
@@ -726,13 +753,8 @@ class SnakeAI extends Individual {
   }
 
   getDirectionVector(dir = this.direction) {
-    switch (dir) {
-      case 'up': return { dx: 0, dy: -1 }
-      case 'down': return { dx: 0, dy: 1 }
-      case 'left': return { dx: -1, dy: 0 }
-      case 'right': return { dx: 1, dy: 0 }
-      default: return { dx: 0, dy: 0 }
-    }
+    // ⚡ PERFORMANCE: Use static mapping ao invés de switch
+    return SnakeAI.DIRECTION_VECTORS[dir] || { dx: 0, dy: 0 }
   }
 
   getPerpendicularVector(vector) {
@@ -798,13 +820,24 @@ class SnakeAI extends Individual {
     if (!this.head) {
       return { north: 0, south: 0, east: 0, west: 0 }
     }
+
+    // ⚡ PERFORMANCE: Cache wall distances (só muda quando cabeça move)
+    const stamp = this.steps
+    if (this._cachedWallDistances && this._cachedWallDistancesStamp === stamp) {
+      return this._cachedWallDistances
+    }
+
     const denom = Math.max(1, GRID_SIZE - 1)
-    return {
+    const result = {
       north: this.head.y / denom,
       south: (GRID_SIZE - 1 - this.head.y) / denom,
       east: (GRID_SIZE - 1 - this.head.x) / denom,
       west: this.head.x / denom
     }
+
+    this._cachedWallDistances = result
+    this._cachedWallDistancesStamp = stamp
+    return result
   }
 
   computeBodyDensity() {
@@ -866,6 +899,13 @@ class SnakeAI extends Individual {
   getDirectionalCorridor(relDir, depth = 6, halfWidth = 1) {
     const delta = this.getDirectionDelta(relDir)
     if (!delta || !this.head) return 0
+
+    // ⚡ PERFORMANCE: Cache corridor checks (caros com nested loops)
+    const cacheKey = `${relDir}_${this.steps}`
+    if (this._corridorCache?.[cacheKey] !== undefined) {
+      return this._corridorCache[cacheKey]
+    }
+
     const perp = this.getPerpendicularVector(delta)
     let minRatio = 1
     for (let step = 1; step <= depth; step++) {
@@ -888,39 +928,94 @@ class SnakeAI extends Individual {
       if (total === 0) continue
       const ratio = free / total
       minRatio = Math.min(minRatio, ratio)
-      if (minRatio === 0) break
+      if (minRatio === 0) break  // ⚡ Early exit
     }
+
+    if (!this._corridorCache) this._corridorCache = {}
+    this._corridorCache[cacheKey] = minRatio
     return minRatio
   }
 
   getDirectionDelta(relDir) {
     if (!this.head) return null
-    const directions = ['up', 'right', 'down', 'left']
-    const currentIndex = directions.indexOf(this.direction)
-    let targetDir = null
-    if (relDir === 'forward') targetDir = this.direction
-    else if (relDir === 'left') targetDir = directions[(currentIndex + 3) % 4]
-    else if (relDir === 'right') targetDir = directions[(currentIndex + 1) % 4]
-    else if (relDir === 'back') targetDir = directions[(currentIndex + 2) % 4]
-    return targetDir ? this.getDirectionVector(targetDir) : null
+    // ⚡ PERFORMANCE: Use cached directionIndex ao invés de indexOf()
+    let targetIndex = this.directionIndex
+    if (relDir === 'left') targetIndex = (this.directionIndex + 3) % 4
+    else if (relDir === 'right') targetIndex = (this.directionIndex + 1) % 4
+    else if (relDir === 'back') targetIndex = (this.directionIndex + 2) % 4
+    // 'forward' keeps targetIndex = this.directionIndex
+
+    const targetDir = SnakeAI.DIRECTION_ORDER[targetIndex]
+    return SnakeAI.DIRECTION_VECTORS[targetDir]
   }
 
   getLocalFreeRatio(radius) {
     if (!this.head) return 0
+
+    // ⚡ PERFORMANCE: Cache local free checks
+    const stamp = this.steps
+    if (this._localFreeCache.stamp === stamp) {
+      if (radius === 1 && this._localFreeCache.radius1 !== null) {
+        return this._localFreeCache.radius1
+      }
+      if (radius === 2 && this._localFreeCache.radius2 !== null) {
+        return this._localFreeCache.radius2
+      }
+    } else {
+      // Reset cache on new step
+      this._localFreeCache = { radius1: null, radius2: null, stamp }
+    }
+
     let free = 0
     let total = 0
-    for (let dx = -radius; dx <= radius; dx++) {
-      for (let dy = -radius; dy <= radius; dy++) {
-        if (dx === 0 && dy === 0) continue
-        const x = this.head.x + dx
-        const y = this.head.y + dy
-        if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue
-        total++
-        if (!this.isOnSnake(x, y)) free++
+
+    // ⚡ OPTIMIZATION: Reuse radius=1 computation for radius=2
+    if (radius === 2 && this._localFreeCache.radius1 !== null) {
+      // Start with radius=1 results
+      free = this._localFreeCache.radius1Data.free
+      total = this._localFreeCache.radius1Data.total
+
+      // Only scan outer ring (radius=2 minus radius=1)
+      for (let dx = -2; dx <= 2; dx++) {
+        for (let dy = -2; dy <= 2; dy++) {
+          if (Math.abs(dx) < 2 && Math.abs(dy) < 2) continue  // Skip inner (radius=1)
+          if (dx === 0 && dy === 0) continue
+          const x = this.head.x + dx
+          const y = this.head.y + dy
+          if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue
+          total++
+          if (!this.isOnSnake(x, y)) free++
+        }
+      }
+    } else {
+      // Normal full scan
+      for (let dx = -radius; dx <= radius; dx++) {
+        for (let dy = -radius; dy <= radius; dy++) {
+          if (dx === 0 && dy === 0) continue
+          const x = this.head.x + dx
+          const y = this.head.y + dy
+          if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue
+          total++
+          if (!this.isOnSnake(x, y)) free++
+        }
+      }
+
+      // Cache radius=1 data for potential reuse
+      if (radius === 1) {
+        this._localFreeCache.radius1Data = { free, total }
       }
     }
-    if (total === 0) return 0
-    return free / total
+
+    const ratio = total === 0 ? 0 : free / total
+
+    // Store in cache
+    if (radius === 1) {
+      this._localFreeCache.radius1 = ratio
+    } else if (radius === 2) {
+      this._localFreeCache.radius2 = ratio
+    }
+
+    return ratio
   }
 
   getDistanceToFood() {
@@ -1071,18 +1166,18 @@ class SnakeAI extends Individual {
 
   turn(action) {
     // RELATIVE ACTIONS - much easier to learn!
-    const directions = ['up', 'right', 'down', 'left']
-    const currentIndex = directions.indexOf(this.direction)
-
+    // ⚡ PERFORMANCE: Use cached directionIndex ao invés de indexOf()
     this.lastTurnDelta = 0
     if (action === 'forward') {
       return
     } else if (action === 'left') {
       this.lastTurnDelta = 1
-      this.direction = directions[(currentIndex + 3) % 4]
+      this.directionIndex = (this.directionIndex + 3) % 4
+      this.direction = SnakeAI.DIRECTION_ORDER[this.directionIndex]
     } else if (action === 'right') {
       this.lastTurnDelta = -1
-      this.direction = directions[(currentIndex + 1) % 4]
+      this.directionIndex = (this.directionIndex + 1) % 4
+      this.direction = SnakeAI.DIRECTION_ORDER[this.directionIndex]
     }
   }
 
@@ -1224,6 +1319,8 @@ class SnakeAI extends Individual {
     this.stepsTrend = clamp((this.stepsTrend ?? 0) * (1 - stepTrendAlpha) + stepDelta * stepTrendAlpha, -1, 1)
     this.prevStepsRatio = currentStepsRatio
 
+    // ⚡ PERFORMANCE: Invalidate caches after move
+    this._corridorCache = null  // Corridor checks need refresh
     this.invalidateSpatialCache()
   }
 
@@ -1266,7 +1363,7 @@ class SnakeAI extends Individual {
     let totalSteps = 0
     let allVisited = new Set()
     let sumVisitedCounts = 0
-    let maxFoodEaten = -Infinity
+    let maxFoodEaten = 0  // ✅ FIX: Inicializar com 0 ao invés de -Infinity para evitar NaN
     let bestRunSteps = 0
     let bestVisitedSet = null
 

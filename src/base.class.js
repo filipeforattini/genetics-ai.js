@@ -109,30 +109,34 @@ export class Base {
       // Connection: 5 chars total = 25 bits
       // Check if we have enough bits
       if (position + 25 > totalBits) return null
-      
-      // Extract data from config
+
+      // OPTIMIZED: Read remaining 20 bits at once instead of 2 separate calls
+      // configBits already has first 5 bits
+      const remaining20 = buffer.readBits(20, position + 5)
+
+      // Extract data from config (already read)
       base.data = (configBits >> 1) & 0b1111  // 4 bits
-      
-      // Read source (10 bits)
-      const sourceBits = buffer.readBits(10, position + 5)
+
+      // Extract source from upper 10 bits of remaining20
+      const sourceBits = (remaining20 >> 10) & 0b1111111111
       const sourceId = sourceBits >> 1  // 9 bits
       const sourceType = sourceBits & 1  // 1 bit
-      
+
       base.source = {
         id: sourceId,
         type: sourceType === 0 ? 'sensor' : 'neuron'
       }
-      
-      // Read target (10 bits)
-      const targetBits = buffer.readBits(10, position + 15)
+
+      // Extract target from lower 10 bits of remaining20
+      const targetBits = remaining20 & 0b1111111111
       const targetId = targetBits >> 1  // 9 bits
       const targetType = targetBits & 1  // 1 bit
-      
+
       base.target = {
         id: targetId,
         type: targetType === 0 ? 'neuron' : 'action'
       }
-      
+
       base.bitLength = 25
     }
     

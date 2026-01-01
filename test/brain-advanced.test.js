@@ -20,20 +20,25 @@ describe('Brain advanced behaviors', () => {
 
     const action = new Vertex('a#0', { type: 'action', bias: 0 })
     action.in.push({ vertex: neuron, weight: 1 })
+    action.tick = function() {
+      const input = this.calculateInput ? this.calculateInput(1) :
+        this.in.reduce((sum, inp) => sum + inp.vertex.cache.value * inp.weight, 0)
+      return input + 1  // Add 1 like the mock did
+    }
 
     // Prepare caches
     sensor.cache = { generation: -1, value: 0 }
     neuron.cache = { generation: -1, value: 0 }
     action.cache = { generation: -1, value: 0 }
 
-    // Define layer connections mirroring the inputs above
+    // Define layer connections using NEW format with TypedArrays
+    // vertexTypes: 0=sensor, 1=neuron, 2=action
     const connections = {
-      vertexRanges: [
-        { start: 0, count: 0 }, // sensor
-        { start: 0, count: 1 }, // neuron depends on sensor
-        { start: 1, count: 1 }  // action depends on neuron
-      ],
-      sourceIndices: [sensor, neuron],
+      rangeStarts: new Uint16Array([0, 0, 1]),   // connection range start for each vertex
+      rangeCounts: new Uint16Array([0, 1, 1]),   // connection count for each vertex
+      vertexTypes: new Uint8Array([0, 1, 2]),    // sensor=0, neuron=1, action=2
+      sourceVertices: [sensor, neuron],          // source vertex for each connection
+      sourceCaches: [sensor.cache, neuron.cache], // source cache for each connection
       weightsTyped: new Float32Array([2, 1]),
       outputs: new Float32Array(3),
       biases: new Float32Array([0, 0, 0])
@@ -60,6 +65,17 @@ describe('Brain advanced behaviors', () => {
     brain.actions = {
       'a#0': { tick: jest.fn((value) => value + 1) }
     }
+
+    // New tick method requires action arrays and connections
+    brain._allActions = [action]
+    brain._activeActions = [action]
+    brain._actionConnections = new Map([
+      ['a#0', {
+        sources: [neuron],
+        caches: [neuron.cache],
+        weights: [1]
+      }]
+    ])
 
     brain._features = {
       hasAttributes: false,

@@ -2,10 +2,26 @@
   "name": "genetics-ai.js",
   "version": "2.3.0",
   "description": "A Genetic Algorithm AI lib for JS",
+  "homepage": "https://github.com/filipeforattini/genetics-ai.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/filipeforattini/genetics-ai.js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/filipeforattini/genetics-ai.js/issues"
+  },
   "main": "./dist/app.esm.js",
   "author": "filipeforattini",
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "rollup -c",
     "test": "node --experimental-vm-modules --no-warnings ./node_modules/jest/bin/jest.js ./test --coverage",

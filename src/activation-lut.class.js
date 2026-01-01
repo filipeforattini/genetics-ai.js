@@ -18,6 +18,11 @@ export class ActivationLUT {
     this.TABLE_SIZE = 8000  // 8000 entries = precision of ~0.0025 per step
     this.STEP = (this.RANGE_MAX - this.RANGE_MIN) / this.TABLE_SIZE
 
+    // 🚀 FAST INVERSE: Pre-compute 1/STEP to replace division with multiplication
+    // Division costs ~6-20 cycles, multiplication costs ~1-3 cycles
+    // This is the spirit of fast inverse square root from Quake 3!
+    this.INV_STEP = 1 / this.STEP
+
     // Pre-compute lookup tables
     this.sigmoidTable = this._buildSigmoidTable()
     this.tanhTable = this._buildTanhTable()
@@ -63,11 +68,15 @@ export class ActivationLUT {
     if (x <= this.RANGE_MIN) return 0
     if (x >= this.RANGE_MAX) return 1
 
-    // Find table index
+    // 🚀 MAGIC TRICK: Replace division with multiplication using pre-computed inverse
+    // offset / STEP → offset * INV_STEP (saves ~4-17 cycles per call!)
     const offset = x - this.RANGE_MIN
-    const index = offset / this.STEP
-    const lowerIdx = Math.floor(index)
-    const upperIdx = Math.ceil(index)
+    const index = offset * this.INV_STEP  // ⚡ Multiplication instead of division!
+
+    // 🚀 BITWISE FLOOR/CEIL: derive ceil from the floor to avoid precision loss
+    const lowerIdx = index | 0
+    let upperIdx = lowerIdx + (index > lowerIdx ? 1 : 0)
+    if (upperIdx > this.TABLE_SIZE) upperIdx = this.TABLE_SIZE
 
     // Linear interpolation for smoothness
     if (lowerIdx === upperIdx) {
@@ -92,11 +101,13 @@ export class ActivationLUT {
     if (x <= this.RANGE_MIN) return -1
     if (x >= this.RANGE_MAX) return 1
 
-    // Find table index
+    // 🚀 MAGIC TRICK: Replace division with multiplication using pre-computed inverse
     const offset = x - this.RANGE_MIN
-    const index = offset / this.STEP
-    const lowerIdx = Math.floor(index)
-    const upperIdx = Math.ceil(index)
+    const index = offset * this.INV_STEP  // ⚡ Multiplication instead of division!
+
+    const lowerIdx = index | 0
+    let upperIdx = lowerIdx + (index > lowerIdx ? 1 : 0)
+    if (upperIdx > this.TABLE_SIZE) upperIdx = this.TABLE_SIZE
 
     // Linear interpolation
     if (lowerIdx === upperIdx) {

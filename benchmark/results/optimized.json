@@ -1,0 +1,50 @@
+{
+  "timestamp": "2025-11-16T16:29:56.367Z",
+  "node_version": "v23.8.0",
+  "platform": "linux",
+  "arch": "x64",
+  "results": {
+    "activationLUT_sigmoid": {
+      "name": "ActivationLUT.sigmoid",
+      "totalTime": "23.167",
+      "avgTime": "0.023167",
+      "opsPerSec": "43165569",
+      "iterations": 1000000
+    },
+    "activationLUT_tanh": {
+      "name": "ActivationLUT.tanh",
+      "totalTime": "29.778",
+      "avgTime": "0.029778",
+      "opsPerSec": "33581581",
+      "iterations": 1000000
+    },
+    "vertex_calculateInput": {
+      "name": "Vertex.calculateInput (10 inputs)",
+      "totalTime": "27.889",
+      "avgTime": "0.055777",
+      "opsPerSec": "17928487",
+      "iterations": 500000
+    },
+    "brain_tick": {
+      "name": "Brain.tick (realistic network)",
+      "totalTime": "1.521",
+      "avgTime": "0.152073",
+      "opsPerSec": "6575768",
+      "iterations": 10000
+    },
+    "genome_mutate": {
+      "name": "Genome.mutate (200 bases, rate=0.001)",
+      "totalTime": "130.309",
+      "avgTime": "130.309058",
+      "opsPerSec": "7674",
+      "iterations": 1000
+    },
+    "base_parsing": {
+      "name": "Base.fromBitBuffer (connection)",
+      "totalTime": "10.867",
+      "avgTime": "0.108670",
+      "opsPerSec": "9202139",
+      "iterations": 100000
+    }
+  }
+}

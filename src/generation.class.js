@@ -1,4 +1,4 @@
-import { chunk, take } from "lodash-es"
+import { chunk } from "lodash-es"
 
 import { Genome } from "./genome.class.js"
 import { Individual } from "./individual.class.js"
@@ -427,9 +427,62 @@ export class Generation {
       return 0
     }
 
-    // Sort by fitness (descending) and get elite
-    const sortedByFitness = [...this.population].sort((a, b) => getFitness(b) - getFitness(a))
-    const elite = sortedByFitness.slice(0, eliteCount)
+    const eliteHeap = []
+
+    const siftUp = (idx) => {
+      while (idx > 0) {
+        const parent = (idx - 1) >> 1
+        if (eliteHeap[parent].fitness <= eliteHeap[idx].fitness) break
+        const tmp = eliteHeap[parent]
+        eliteHeap[parent] = eliteHeap[idx]
+        eliteHeap[idx] = tmp
+        idx = parent
+      }
+    }
+
+    const siftDown = (idx) => {
+      const length = eliteHeap.length
+      while (true) {
+        let smallest = idx
+        const left = (idx << 1) + 1
+        const right = left + 1
+
+        if (left < length && eliteHeap[left].fitness < eliteHeap[smallest].fitness) {
+          smallest = left
+        }
+        if (right < length && eliteHeap[right].fitness < eliteHeap[smallest].fitness) {
+          smallest = right
+        }
+
+        if (smallest === idx) break
+        const tmp = eliteHeap[smallest]
+        eliteHeap[smallest] = eliteHeap[idx]
+        eliteHeap[idx] = tmp
+        idx = smallest
+      }
+    }
+
+    const considerElite = (fitness, individual) => {
+      if (eliteCount === 0) return
+      if (eliteHeap.length < eliteCount) {
+        eliteHeap.push({ fitness, individual })
+        siftUp(eliteHeap.length - 1)
+        return
+      }
+
+      if (fitness > eliteHeap[0].fitness) {
+        eliteHeap[0] = { fitness, individual }
+        siftDown(0)
+      }
+    }
+
+    for (const ind of this.population) {
+      considerElite(getFitness(ind), ind)
+    }
+
+    const elite = eliteHeap
+      .sort((a, b) => b.fitness - a.fitness)
+      .map(entry => entry.individual)
 
     // Record survivor count before elitism forces revival
     const survivorsBeforeElitism = this.population.reduce((count, ind) => count + (ind.dead ? 0 : 1), 0)

@@ -1,0 +1,282 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: ['main']
+    tags: ['v*']
+  pull_request:
+    branches: ['main']
+
+jobs:
+  quality:
+    name: Quality Check
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Run Tests
+        run: pnpm test
+
+  release-next:
+    name: Release Next
+    needs: quality
+    if: |
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      # SECURITY: Using env var for commit message (safe pattern per GitHub security guide)
+      - name: Check if version bump commit
+        id: check
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          # Get only the first line of the commit message (safe: using env var)
+          FIRST_LINE=$(echo "$COMMIT_MSG" | head -n 1)
+          if [[ "$FIRST_LINE" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Skipping: version bump commit detected"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        if: steps.check.outputs.skip != 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js (NPM Registry)
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        if: steps.check.outputs.skip != 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Bump Version (Next)
+        if: steps.check.outputs.skip != 'true'
+        id: version
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          SHA=$(git rev-parse --short HEAD)
+          BASE_VERSION=$(echo $CURRENT_VERSION | cut -d'-' -f1)
+          NEW_VERSION="$BASE_VERSION-next.$SHA"
+
+          echo "New version: $NEW_VERSION"
+          npm version $NEW_VERSION --no-git-tag-version
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build
+        if: steps.check.outputs.skip != 'true'
+        run: pnpm run build
+
+      - name: Publish to NPM (Next)
+        if: steps.check.outputs.skip != 'true'
+        run: pnpm publish --tag next --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Job Summary
+        if: steps.check.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          SHORT_SHA=${COMMIT_SHA:0:7}
+          echo "## 🧬 Next Release Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version** | \`$VERSION\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Tag** | \`next\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | [\`$SHORT_SHA\`]($REPO_URL/commit/$COMMIT_SHA) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | \`$BRANCH\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Installation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "npm install genetics-ai.js@next" >> $GITHUB_STEP_SUMMARY
+          echo "pnpm add genetics-ai.js@next" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Skip Summary
+        if: steps.check.outputs.skip == 'true'
+        run: |
+          echo "## ⏭️ Release Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Version bump commit detected. Skipping @next release." >> $GITHUB_STEP_SUMMARY
+
+  release-stable:
+    name: Release Stable
+    needs: quality
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js (NPM Registry)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Publish to NPM (Stable)
+        run: pnpm publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Generate Changelog
+        id: changelog
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          CURRENT_TAG=${GITHUB_REF#refs/tags/}
+
+          echo "## What's Changed" > CHANGELOG_BODY.md
+          echo "" >> CHANGELOG_BODY.md
+
+          if [ -n "$PREV_TAG" ]; then
+            echo "Changes since $PREV_TAG:" >> CHANGELOG_BODY.md
+            echo "" >> CHANGELOG_BODY.md
+
+            FEATURES=$(git log $PREV_TAG..HEAD --pretty=format:"- %s" --grep="^feat" 2>/dev/null || true)
+            if [ -n "$FEATURES" ]; then
+              echo "### 🚀 Features" >> CHANGELOG_BODY.md
+              echo "$FEATURES" >> CHANGELOG_BODY.md
+              echo "" >> CHANGELOG_BODY.md
+            fi
+
+            FIXES=$(git log $PREV_TAG..HEAD --pretty=format:"- %s" --grep="^fix" 2>/dev/null || true)
+            if [ -n "$FIXES" ]; then
+              echo "### 🐛 Bug Fixes" >> CHANGELOG_BODY.md
+              echo "$FIXES" >> CHANGELOG_BODY.md
+              echo "" >> CHANGELOG_BODY.md
+            fi
+
+            PERF=$(git log $PREV_TAG..HEAD --pretty=format:"- %s" --grep="^perf" 2>/dev/null || true)
+            if [ -n "$PERF" ]; then
+              echo "### ⚡ Performance" >> CHANGELOG_BODY.md
+              echo "$PERF" >> CHANGELOG_BODY.md
+              echo "" >> CHANGELOG_BODY.md
+            fi
+
+            DOCS=$(git log $PREV_TAG..HEAD --pretty=format:"- %s" --grep="^docs" 2>/dev/null || true)
+            if [ -n "$DOCS" ]; then
+              echo "### 📚 Documentation" >> CHANGELOG_BODY.md
+              echo "$DOCS" >> CHANGELOG_BODY.md
+              echo "" >> CHANGELOG_BODY.md
+            fi
+
+            echo "### 👥 Contributors" >> CHANGELOG_BODY.md
+            git log $PREV_TAG..HEAD --pretty=format:"- %an" | sort -u >> CHANGELOG_BODY.md
+            echo "" >> CHANGELOG_BODY.md
+            echo "" >> CHANGELOG_BODY.md
+            echo "**Full Changelog**: https://github.com/$REPO/compare/$PREV_TAG...$CURRENT_TAG" >> CHANGELOG_BODY.md
+          else
+            echo "Initial release! 🎉" >> CHANGELOG_BODY.md
+          fi
+
+          echo "" >> CHANGELOG_BODY.md
+          echo "---" >> CHANGELOG_BODY.md
+          echo "" >> CHANGELOG_BODY.md
+          echo "## 📦 Installation" >> CHANGELOG_BODY.md
+          echo "" >> CHANGELOG_BODY.md
+          echo "\`\`\`bash" >> CHANGELOG_BODY.md
+          echo "npm install genetics-ai.js" >> CHANGELOG_BODY.md
+          echo "pnpm add genetics-ai.js" >> CHANGELOG_BODY.md
+          echo "\`\`\`" >> CHANGELOG_BODY.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: CHANGELOG_BODY.md
+          draft: false
+          prerelease: false
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Job Summary
+        env:
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "## 🧬 Stable Release Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version** | \`$VERSION\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Tag** | \`latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Git Tag** | [\`v$VERSION\`]($REPO_URL/releases/tag/v$VERSION) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Installation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "npm install genetics-ai.js" >> $GITHUB_STEP_SUMMARY
+          echo "pnpm add genetics-ai.js" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- [GitHub Release]($REPO_URL/releases/tag/v$VERSION)" >> $GITHUB_STEP_SUMMARY
+          echo "- [NPM Package](https://www.npmjs.com/package/genetics-ai.js)" >> $GITHUB_STEP_SUMMARY

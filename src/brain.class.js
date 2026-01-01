@@ -10,7 +10,6 @@ import { EvolvedNeuronBase, EvolvedNeuronModes } from "./bases/evolved-neuron.ba
 import { LearningRuleBase } from "./bases/learning-rule.base.js"
 import { MemoryCellBase } from "./bases/memory-cell.base.js"
 import { PlasticityBase } from "./bases/plasticity.base.js"
-import { JITTickGenerator } from "./jit-tick-generator.class.js"
 
 // Activation functions with ULTRA-FAST lookup tables
 // LUT = Lookup Table: Pre-computed values, 50-100x faster than Math.exp()!
@@ -87,6 +86,11 @@ export class Brain {
     this.memoryCells = []
     this.plasticities = []
     this.attributes = []
+    this._allActions = []
+    this._activeActions = []
+    this._actionConnections = new Map()
+    this._actionAttributeMap = new Map()
+    this._sensorAttributesApplied = false
 
     // Memory cell state (persistent across ticks)
     this.memoryCellState = new Map()  // cellId -> current value
@@ -131,45 +135,24 @@ export class Brain {
       }
     }
 
+    // Auto-fix cycles before computing tick order
+    this.fixCycles()
+
     this.tickOrder = this.defineTickOrder()
 
+    this._allActions = Object.values(this.definitions.actions)
+    this._activeActions = this._allActions.filter(action => action.in.length > 0)
+    this.buildActionConnections()
+
     // Determine optimization mode based on network size
-    // Count total connections to decide optimization strategy
     const connectionCount = Object.values(this.definitions.all).reduce((sum, v) => sum + v.in.length, 0)
 
-    // Adaptive optimization: choose strategy based on network size
-    // JIT (5-200 connections): Generate specialized code - FASTEST
-    // Direct (<5 or no features): Simple processing
-    // Layered (>200): Batch processing for very large networks
-
-    const hasAdvancedFeatures = (this.attributes.length > 0) ||
-                                (this.learningRules.length > 0) ||
-                                (this.memoryCells.length > 0)
-
-    // Debug: log decision
-    const debugJIT = false // Set to true to debug
-    if (debugJIT) {
-      console.log('JIT decision:', {
-        connectionCount,
-        hasAdvancedFeatures,
-        shouldTryJIT: connectionCount >= 5 && connectionCount <= 200 && !hasAdvancedFeatures
-      })
-    }
-
-    // JIT DISABLED: Benchmarks show it's slower than optimized implementation (-39%)
-    // Current implementation is already +12.4% faster than previous version!
-    // Keeping JIT code for future optimization attempts
-    this.useJIT = false
-    this.jitTickFunction = null
-
+    // Large networks (150+ connections): use layered batch processing
+    // Smaller networks: use direct processing (simpler, less overhead)
     if (connectionCount >= 150) {
-      // Large networks: use layered processing
-      this.useJIT = false
       this.useLayeredProcessing = true
       this.layers = this.buildLayers()
     } else {
-      // Very small or complex: direct processing
-      this.useJIT = false
       this.useLayeredProcessing = false
       this.layers = null
     }
@@ -200,6 +183,13 @@ export class Brain {
       }
     }
 
+    if (this._features.hasSensorAttributes) {
+      this.applySensorAttributes(true)
+    }
+    if (this._features.hasActionAttributes) {
+      this.buildActionAttributeMap()
+    }
+
     // Allocate TypedArrays after we know vertex counts
     const neuronCount = Object.keys(this.definitions.neurons).length
     const sensorCount = Object.keys(this.definitions.sensors).length
@@ -219,45 +209,32 @@ export class Brain {
     const activationFunction = this.activationFunction
     const useReluFastPath = activationFunction === relu
     const context = env.me || this
-    
-    // Cache for bound functions - compatible with all environments
-    const hasMap = typeof Map !== 'undefined'
-    const boundFunctions = hasMap ? new Map() : {}
+    const brain = this  // Capture for closures
 
-    // Setup sensors with cached bound functions
-    const brain = this  // Reference for closure
+    // Cache for bound functions
+    const boundFunctions = new Map()
+
+    // Setup sensors with closures (V8 JIT optimizes these well)
     for (const vertex of Object.values(this.definitions.sensors)) {
       const sensorDef = this.sensors[vertex.name]
-      
+
       if (!sensorDef?.tick) {
         vertex.tick = function() {
           return this.metadata.bias || 0
         }
       } else {
-        // Cache bound function
-        let boundFn
-        if (hasMap) {
-          boundFn = boundFunctions.get(sensorDef.tick)
-          if (!boundFn) {
-            boundFn = sensorDef.tick.bind(context)
-            boundFunctions.set(sensorDef.tick, boundFn)
-          }
-        } else {
-          const key = sensorDef.tick.toString()
-          boundFn = boundFunctions[key]
-          if (!boundFn) {
-            boundFn = sensorDef.tick.bind(context)
-            boundFunctions[key] = boundFn
-          }
+        let boundFn = boundFunctions.get(sensorDef.tick)
+        if (!boundFn) {
+          boundFn = sensorDef.tick.bind(context)
+          boundFunctions.set(sensorDef.tick, boundFn)
         }
-        
         vertex.tick = function() {
           return boundFn(env) + (this.metadata.bias || 0)
         }
       }
     }
 
-    // Optimize neuron tick functions based on activation type
+    // Setup neurons with closures
     for (const vertex of Object.values(this.definitions.neurons)) {
       vertex.tick = function() {
         const input = this.calculateInput(brain.tickGeneration) + (this.metadata.bias || 0)
@@ -272,34 +249,21 @@ export class Brain {
       })
     }
 
-    // Setup actions with cached bound functions
+    // Setup actions with closures
     for (const vertex of Object.values(this.definitions.actions)) {
       const actionDef = this.actions[vertex.name]
-      
+
       if (!actionDef?.tick) {
         vertex.tick = function() {
           const input = this.calculateInput(brain.tickGeneration) + (this.metadata.bias || 0)
-          const activated = useReluFastPath ? (input > 0 ? input : 0) : activationFunction(input)
-          return 0
+          return useReluFastPath ? (input > 0 ? input : 0) : activationFunction(input)
         }
       } else {
-        // Cache bound function
-        let boundFn
-        if (hasMap) {
-          boundFn = boundFunctions.get(actionDef.tick)
-          if (!boundFn) {
-            boundFn = actionDef.tick.bind(context)
-            boundFunctions.set(actionDef.tick, boundFn)
-          }
-        } else {
-          const key = actionDef.tick.toString()
-          boundFn = boundFunctions[key]
-          if (!boundFn) {
-            boundFn = actionDef.tick.bind(context)
-            boundFunctions[key] = boundFn
-          }
+        let boundFn = boundFunctions.get(actionDef.tick)
+        if (!boundFn) {
+          boundFn = actionDef.tick.bind(context)
+          boundFunctions.set(actionDef.tick, boundFn)
         }
-        
         vertex.tick = function() {
           const input = this.calculateInput(brain.tickGeneration) + (this.metadata.bias || 0)
           const activated = useReluFastPath ? (input > 0 ? input : 0) : activationFunction(input)
@@ -400,6 +364,118 @@ export class Brain {
     return this.definitions[collection][id]
   }
 
+  /**
+   * Validate that the neural network is a DAG (Directed Acyclic Graph)
+   * Uses DFS to detect cycles in the graph
+   * @returns {{ isDAG: boolean, cycles: Array<{ from: string, to: string }> }}
+   */
+  validateDAG() {
+    const vertices = Object.values(this.definitions.all)
+    const visited = new Set()
+    const recStack = new Set()
+    const cycles = []
+
+    const hasCycle = (vertex) => {
+      visited.add(vertex.name)
+      recStack.add(vertex.name)
+
+      for (const edge of vertex.out) {
+        const neighbor = edge.vertex
+        if (!visited.has(neighbor.name)) {
+          if (hasCycle(neighbor)) return true
+        } else if (recStack.has(neighbor.name)) {
+          cycles.push({ from: vertex.name, to: neighbor.name })
+          return true
+        }
+      }
+
+      recStack.delete(vertex.name)
+      return false
+    }
+
+    for (const vertex of vertices) {
+      if (!visited.has(vertex.name)) {
+        hasCycle(vertex)
+      }
+    }
+
+    return { isDAG: cycles.length === 0, cycles }
+  }
+
+  /**
+   * Auto-fix cycles by removing connections that cause them
+   * Optimized: Uses Set for O(n) batch removal instead of O(n²) per-edge removal
+   * @returns {number} Number of connections removed
+   */
+  fixCycles() {
+    let totalFixed = 0
+    let validation = this.validateDAG()
+
+    // Loop while cycles exist (usually just 1 iteration needed)
+    while (!validation.isDAG && validation.cycles.length > 0) {
+      // Collect ALL edges to remove in a Set for O(1) lookup
+      const edgesToRemove = new Set()
+      for (const cycle of validation.cycles) {
+        edgesToRemove.add(`${cycle.from}|${cycle.to}`)
+      }
+
+      let fixedThisRound = 0
+
+      // Single pass through all vertices, removing all cycle edges at once
+      for (const vertexName in this.definitions.all) {
+        const vertex = this.definitions.all[vertexName]
+
+        // Check outgoing edges
+        const originalOutLen = vertex.out.length
+        if (originalOutLen > 0) {
+          // Filter out edges that are in cycles
+          const newOut = []
+          for (let i = 0; i < vertex.out.length; i++) {
+            const edge = vertex.out[i]
+            const edgeKey = `${vertexName}|${edge.vertex.name}`
+            if (edgesToRemove.has(edgeKey)) {
+              delete vertex.outMap[edge.vertex.name]
+              fixedThisRound++
+            } else {
+              newOut.push(edge)
+            }
+          }
+          if (newOut.length !== originalOutLen) {
+            vertex.out = newOut
+          }
+        }
+
+        // Check incoming edges
+        const originalInLen = vertex.in.length
+        if (originalInLen > 0) {
+          const newIn = []
+          for (let i = 0; i < vertex.in.length; i++) {
+            const edge = vertex.in[i]
+            const edgeKey = `${edge.vertex.name}|${vertexName}`
+            if (edgesToRemove.has(edgeKey)) {
+              delete vertex.inMap[edge.vertex.name]
+              // Don't double-count - already counted in out removal
+            } else {
+              newIn.push(edge)
+            }
+          }
+          if (newIn.length !== originalInLen) {
+            vertex.in = newIn
+          }
+        }
+      }
+
+      totalFixed += fixedThisRound
+
+      // Revalidate once after batch removal (not after each edge)
+      validation = this.validateDAG()
+    }
+
+    // Silent fix - no logging (was spamming during evolution)
+
+    return totalFixed
+  }
+
   defineTickOrder() {
     let tickList = []
 
@@ -438,6 +514,7 @@ export class Brain {
   /**
    * V3: Build layer structure from tickOrder for batched computation
    * Groups vertices by depth to enable matrix operations per layer
+   * OPTIMIZED: Removed unused vertexIndices Map for reduced memory
    * @returns {Array<Object>} Array of layer objects
    */
   buildLayers() {
@@ -448,7 +525,7 @@ export class Brain {
     let currentLayer = {
       depth: currentDepth,
       vertices: [],
-      vertexIndices: new Map(),  // vertex.name -> index in layer
+      // REMOVED: vertexIndices Map was never used, just wasted memory
     }
 
     // Group vertices by depth
@@ -462,14 +539,11 @@ export class Brain {
         currentLayer = {
           depth: currentDepth,
           vertices: [],
-          vertexIndices: new Map(),
         }
       }
 
       // Add vertex to current layer
-      const idx = currentLayer.vertices.length
       currentLayer.vertices.push(item.vertex)
-      currentLayer.vertexIndices.set(item.vertex.name, idx)
     }
 
     // Push final layer
@@ -488,144 +562,177 @@ export class Brain {
   /**
    * V3: Build connection information for a layer
    * Prepares data structures for efficient batched computation
+   * OPTIMIZED: TypedArrays for ranges, pre-computed vertex types
    * @param {Object} layer - Layer object to populate with connection info
    */
   buildLayerConnectionInfo(layer) {
     const vertexCount = layer.vertices.length
 
+    // First pass: count total connections to pre-allocate
+    let totalConnections = 0
+    for (let i = 0; i < vertexCount; i++) {
+      totalConnections += layer.vertices[i].in.length
+    }
+
     // Pre-allocate arrays for connection data
-    // Format: For each vertex in layer, store all input connections
+    // OPTIMIZED: Use TypedArrays for ranges instead of objects
     layer.connections = {
       // Total number of connections in this layer
-      totalCount: 0,
+      totalCount: totalConnections,
 
-      // For each vertex: [startIdx, count] in flattened arrays
-      vertexRanges: new Array(vertexCount),
+      // OPTIMIZED: TypedArrays for vertex ranges (Uint32 for start, Uint16 for count)
+      // Much better cache locality than array of objects
+      rangeStarts: new Uint32Array(vertexCount),
+      rangeCounts: new Uint16Array(vertexCount),
 
-      // Flattened connection data
-      sourceIndices: [],   // Index of source vertex in overall graph
-      weights: [],         // Connection weights
+      // Flattened connection data (pre-allocated)
+      sourceVertices: new Array(totalConnections),
+      sourceCaches: new Array(totalConnections),
+      weightsTyped: new Float32Array(totalConnections),
 
       // Output buffer for computed values
       outputs: new Float32Array(vertexCount),
       biases: new Float32Array(vertexCount),
+
+      // OPTIMIZED: Pre-computed vertex types (0=sensor, 1=neuron, 2=action)
+      // Avoids string comparison in hot loop
+      vertexTypes: new Uint8Array(vertexCount),
     }
 
-    // Build vertex ID map for fast lookup
-    const vertexIdMap = new Map()
-    for (let i = 0; i < vertexCount; i++) {
-      const vertex = layer.vertices[i]
-      vertexIdMap.set(vertex.name, i)
+    const conn = layer.connections
 
-      // Store bias
-      layer.connections.biases[i] = vertex.metadata.bias || 0
-    }
-
-    // Collect all connections for each vertex in the layer
+    // Second pass: fill arrays
     let flatIdx = 0
     for (let vIdx = 0; vIdx < vertexCount; vIdx++) {
       const vertex = layer.vertices[vIdx]
-      const startIdx = flatIdx
+      const inputs = vertex.in
+      const inputCount = inputs.length
 
-      // Iterate through vertex inputs
-      for (const input of vertex.in) {
-        layer.connections.sourceIndices.push(input.vertex)
-        layer.connections.weights.push(input.weight)
+      // Store bias
+      conn.biases[vIdx] = vertex.metadata.bias || 0
+
+      // Store vertex type as numeric (faster comparison)
+      const type = vertex.metadata.type
+      conn.vertexTypes[vIdx] = type === 'sensor' ? 0 : (type === 'action' ? 2 : 1)
+
+      // Store range info
+      conn.rangeStarts[vIdx] = flatIdx
+      conn.rangeCounts[vIdx] = inputCount
+
+      // Fill connection data
+      for (let i = 0; i < inputCount; i++) {
+        const input = inputs[i]
+        conn.sourceVertices[flatIdx] = input.vertex
+        conn.sourceCaches[flatIdx] = input.vertex.cache
+        conn.weightsTyped[flatIdx] = input.weight
         flatIdx++
       }
-
-      const count = flatIdx - startIdx
-      layer.connections.vertexRanges[vIdx] = { start: startIdx, count }
-      layer.connections.totalCount += count
     }
-
-    // Convert to TypedArrays for better performance
-    layer.connections.weightsTyped = new Float32Array(layer.connections.weights)
   }
 
   /**
    * V3: Process neural network using layered batch computation
    * This method processes all vertices in a layer together, enabling better
    * CPU cache utilization and potential SIMD optimizations
+   * OPTIMIZED: TypedArray ranges, numeric vertex types, reduced dereferencing
    * @param {number} currentGen - Current tick generation for cache
    */
   tickLayered(currentGen) {
     const activation = this.activationFunction
+    const layers = this.layers
+    const layerCount = layers.length
 
     // Process each layer in order (already sorted by depth)
-    for (const layer of this.layers) {
+    for (let layerIdx = 0; layerIdx < layerCount; layerIdx++) {
+      const layer = layers[layerIdx]
       const conn = layer.connections
-      const vertexCount = layer.vertices.length
+      const vertices = layer.vertices
+      const vertexCount = vertices.length
+
+      // OPTIMIZED: Cache TypedArray references outside inner loop
+      const rangeStarts = conn.rangeStarts
+      const rangeCounts = conn.rangeCounts
+      const vertexTypes = conn.vertexTypes
+      const biases = conn.biases
+      const sourceCaches = conn.sourceCaches
+      const sourceVertices = conn.sourceVertices
+      const weights = conn.weightsTyped
+      const outputs = conn.outputs
 
       // Batch compute all vertices in this layer
-      // This is the key optimization: instead of calling each vertex.tick() individually,
-      // we process the entire layer as a batch operation
       for (let vIdx = 0; vIdx < vertexCount; vIdx++) {
-        const vertex = layer.vertices[vIdx]
+        const vertex = vertices[vIdx]
+        const cache = vertex.cache
 
         // Check if already computed this generation (avoid duplicates)
-        if (vertex.cache.generation === currentGen) {
+        if (cache.generation === currentGen) {
           continue
         }
 
-        const range = conn.vertexRanges[vIdx]
+        // OPTIMIZED: Use TypedArrays instead of object property access
+        const rangeStart = rangeStarts[vIdx]
+        const rangeCount = rangeCounts[vIdx]
+        const vertexType = vertexTypes[vIdx]
 
-        // Different handling based on vertex type
+        // Different handling based on vertex type (0=sensor, 1=neuron, 2=action)
         let output
 
-        if (range.count === 0 || vertex.metadata.type === 'sensor') {
+        if (rangeCount === 0 || vertexType === 0) {
           // Sensor: call custom tick function (reads from environment)
           output = vertex.tick ? vertex.tick() : 0
 
           // Cache sensor value
-          vertex.cache.generation = currentGen
-          vertex.cache.value = output
-        } else if (vertex.metadata.type === 'action') {
+          cache.generation = currentGen
+          cache.value = output
+          outputs[vIdx] = output
+        } else if (vertexType === 2) {
           // Action: compute weighted sum but DON'T execute yet
           // We need to find the winning action first, then execute only that one
           let sum = 0
-          for (let i = 0; i < range.count; i++) {
-            const connIdx = range.start + i
-            const sourceVertex = conn.sourceIndices[connIdx]
 
-            const sourceValue = sourceVertex.cache.generation === currentGen
-              ? sourceVertex.cache.value
-              : (sourceVertex.tick ? sourceVertex.tick() : 0)
+          // OPTIMIZED: Minimal inner loop with cached references
+          for (let i = 0; i < rangeCount; i++) {
+            const connIdx = rangeStart + i
+            const sourceCache = sourceCaches[connIdx]
 
-            sum += sourceValue * conn.weightsTyped[connIdx]
+            // Fast path: already cached this generation
+            const sourceValue = sourceCache.generation === currentGen
+              ? sourceCache.value
+              : sourceVertices[connIdx].getCachedOrCalculate(currentGen)
+
+            sum += sourceValue * weights[connIdx]
           }
 
           // Store the raw input (before activation) for later comparison
-          const input = sum + conn.biases[vIdx]
-          vertex.cache.generation = currentGen
-          vertex.cache.input = input  // Store input for action selection
-          vertex.cache.value = activation(input)  // Store activated value for execution
+          const input = sum + biases[vIdx]
+          cache.generation = currentGen
+          cache.input = input  // Store input for action selection
+          cache.value = activation(input)  // Store activated value for execution
         } else {
           // Neuron: compute weighted sum of inputs
           let sum = 0
-          for (let i = 0; i < range.count; i++) {
-            const connIdx = range.start + i
-            const sourceVertex = conn.sourceIndices[connIdx]
 
-            const sourceValue = sourceVertex.cache.generation === currentGen
-              ? sourceVertex.cache.value
-              : (sourceVertex.tick ? sourceVertex.tick() : 0)
+          // OPTIMIZED: Minimal inner loop with cached references
+          for (let i = 0; i < rangeCount; i++) {
+            const connIdx = rangeStart + i
+            const sourceCache = sourceCaches[connIdx]
 
-            sum += sourceValue * conn.weightsTyped[connIdx]
+            // Fast path: already cached this generation
+            const sourceValue = sourceCache.generation === currentGen
+              ? sourceCache.value
+              : sourceVertices[connIdx].getCachedOrCalculate(currentGen)
+
+            sum += sourceValue * weights[connIdx]
           }
 
           // Add bias and apply activation
-          const input = sum + conn.biases[vIdx]
+          const input = sum + biases[vIdx]
           output = activation(input)
 
           // Cache neuron value
-          vertex.cache.generation = currentGen
-          vertex.cache.value = output
-        }
-
-        // Store in layer output buffer for potential future use
-        if (output !== undefined) {
-          conn.outputs[vIdx] = output
+          cache.generation = currentGen
+          cache.value = output
+          outputs[vIdx] = output
         }
       }
     }
@@ -635,57 +742,10 @@ export class Brain {
     // Increment generation for cache invalidation
     this.tickGeneration++
     const currentGen = this.tickGeneration
+    const activationFunction = this.activationFunction
+    const useReluFastPath = activationFunction === relu
 
-    // Apply sensor attributes before processing (only if present)
-    if (this._features.hasSensorAttributes) {
-      this.applySensorAttributes()
-    }
-
-    // V3 ULTRA-OPTIMIZED: Use JIT-compiled function for maximum speed
-    if (this.useJIT && this.jitTickFunction) {
-      // JIT path: Zero overhead, fully specialized code
-      const cache = {}
-      const result = this.jitTickFunction(
-        this,
-        this.sensors,         // Pass sensors map (by name)
-        Object.values(this.actions),
-        this.actions,         // Pass actions map (by name)
-        cache,
-        this.activationFunction
-      )
-
-      // Update vertex caches from JIT results
-      for (const [name, value] of Object.entries(cache)) {
-        const vertex = this.definitions.all[name]
-        if (vertex) {
-          vertex.cache.generation = currentGen
-          vertex.cache.value = value
-        }
-      }
-
-      // Apply post-processing if needed
-      if (this._features) {
-        const maxAction = result && Object.keys(result)[0]
-        if (maxAction && this._features.hasActionAttributes) {
-          const actionVertex = this.definitions.actions[maxAction.substring(2)]
-          if (actionVertex) {
-            this.applyActionAttributes({ vertex: actionVertex, input: cache[maxAction] }, currentGen)
-          }
-        }
-
-        if (this._features.hasLearning) {
-          this.applyLearningRules(currentGen)
-        }
-
-        if (this._features.hasMemory) {
-          this.updateMemoryCells()
-        }
-      }
-
-      return result
-    }
-
-    // V3 Optimized: Use layered batch processing for large networks
+    // Use layered batch processing for large networks
     // Or direct processing for small networks
     if (this.useLayeredProcessing) {
       this.tickLayered(currentGen)
@@ -698,28 +758,57 @@ export class Brain {
 
     // Process actions and find the one with maximum input
     const ticked = {}
-    const actionsInputs = []
+    let maxVertex = null
+    let maxInput = -Infinity
+    const actionPool = this._activeActions.length ? this._activeActions : this._allActions
 
-    for (const action of Object.values(this.definitions.actions)) {
-      if (action.in.length === 0) continue
+    for (const action of actionPool) {
+      const fanIn = this._actionConnections.get(action.name)
+      if (!fanIn) continue
 
-      // Use cached input if available (from layered processing), otherwise calculate
-      const input = (action.cache.generation === currentGen && action.cache.input !== undefined)
+      let input = action.cache.generation === currentGen && action.cache.input !== undefined
         ? action.cache.input
-        : action.calculateInput(currentGen)
+        : null
 
-      actionsInputs.push({ input, vertex: action })
-    }
+      if (input === null) {
+        const sources = fanIn.sources
+        const caches = fanIn.caches
+        const weights = fanIn.weights
+        let sum = 0
 
-    if (actionsInputs.length === 0) return ticked
+        for (let idx = 0; idx < sources.length; idx++) {
+          const cache = caches[idx]
+          let value
+          if (cache.generation === currentGen) {
+            value = cache.value
+          } else {
+            const sourceVertex = sources[idx]
+            value = sourceVertex.getCachedOrCalculate
+              ? sourceVertex.getCachedOrCalculate(currentGen)
+              : (sourceVertex.tick ? sourceVertex.tick() : 0)
+          }
 
-    // Find max action
-    let maxAction = actionsInputs[0]
-    for (let i = 1; i < actionsInputs.length; i++) {
-      if (actionsInputs[i].input > maxAction.input) {
-        maxAction = actionsInputs[i]
+          sum += value * weights[idx]
+        }
+
+        input = sum
+      }
+
+      const biased = input + (action.metadata.bias || 0)
+      const activated = useReluFastPath ? (biased > 0 ? biased : 0) : activationFunction(biased)
+      action.cache.generation = currentGen
+      action.cache.input = input
+      action.cache.value = activated
+
+      if (input > maxInput) {
+        maxInput = input
+        maxVertex = action
       }
     }
+
+    if (!maxVertex) return ticked
+
+    const maxAction = { input: maxInput, vertex: maxVertex }
 
     // Apply action attributes before execution (only if present)
     if (this._features.hasActionAttributes) {
@@ -727,6 +816,13 @@ export class Brain {
     }
 
     // Execute the winning action
+    // CRITICAL FIX: Must call tick() directly for side effects (like setting chosenMove).
+    // The cache was set in the action-finding loop above, but that doesn't execute the
+    // user's tick function. We need to call tick() here for side effects AND return value.
+    //
+    // IMPORTANT: Clear the cache generation to force tick() to re-execute.
+    // Otherwise getCachedOrCalculate would just return the cached value without calling tick.
+    maxAction.vertex.cache.generation = -1  // Invalidate cache to force re-execution
     ticked[maxAction.vertex.name] = maxAction.vertex.getCachedOrCalculate(currentGen)
 
     // Apply learning rules after tick (only if present)
@@ -745,8 +841,9 @@ export class Brain {
   /**
    * Apply attribute influences to sensors
    */
-  applySensorAttributes() {
+  applySensorAttributes(force = false) {
     if (!this.attributes.length) return
+    if (this._sensorAttributesApplied && !force) return
 
     for (const attr of this.attributes) {
       // Skip if not targeting sensors
@@ -778,6 +875,33 @@ export class Brain {
         }
       }
     }
+
+    this._sensorAttributesApplied = true
+  }
+
+  buildActionAttributeMap() {
+    this._actionAttributeMap = new Map()
+    if (!this.attributes.length) return
+
+    const actionEntries = Object.values(this.definitions.actions)
+    if (!actionEntries.length) return
+
+    const register = (actionId, attr) => {
+      if (!this._actionAttributeMap.has(actionId)) {
+        this._actionAttributeMap.set(actionId, [])
+      }
+      this._actionAttributeMap.get(actionId).push(attr)
+    }
+
+    for (const attr of this.attributes) {
+      if (attr.targetType === AttributeBase.TARGET_ACTION) {
+        register(attr.targetId, attr)
+      } else if (attr.targetType === AttributeBase.TARGET_GLOBAL) {
+        for (const action of actionEntries) {
+          register(action.metadata.id, attr)
+        }
+      }
+    }
   }
 
   /**
@@ -789,14 +913,11 @@ export class Brain {
 
     const actionVertex = maxAction.vertex
     const actionId = actionVertex.metadata.id
+    const actionAttrs = this._actionAttributeMap.get(actionId)
 
-    for (const attr of this.attributes) {
-      // Check if attribute affects this action
-      if (!AttributeBase.affectsTarget(attr, 'action', actionId)) {
-        continue
-      }
+    if (!actionAttrs || !actionAttrs.length) return
 
-      // Get action name from attribute ID
+    for (const attr of actionAttrs) {
       const attrName = AttributeBase.getAttributeName(attr.attributeId)
 
       // Determine influence mode based on attribute type
@@ -937,5 +1058,28 @@ export class Brain {
     this.neuronValues = null
     this.sensorValues = null
     this.actionValues = null
+  }
+
+  buildActionConnections() {
+    this._actionConnections = new Map()
+
+    for (const action of Object.values(this.definitions.actions)) {
+      const inputs = action.in
+      if (!inputs.length) continue
+
+      const len = inputs.length
+      const sources = new Array(len)
+      const caches = new Array(len)
+      const weights = new Float32Array(len)
+
+      for (let i = 0; i < len; i++) {
+        const input = inputs[i]
+        sources[i] = input.vertex
+        caches[i] = input.vertex.cache
+        weights[i] = input.weight
+      }
+
+      this._actionConnections.set(action.name, { sources, caches, weights })
+    }
   }
 }

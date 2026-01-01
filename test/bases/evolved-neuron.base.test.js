@@ -53,7 +53,8 @@ describe('EvolvedNeuronBase', () => {
     const parsed = EvolvedNeuronBase.fromBitBuffer(buffer, 0)
     expect(parsed.numOps).toBe(3)
     parsed.operationIds.forEach(id => expect(id).toBeLessThan(8))
-    expect(parsed.targetId).toBe(4)
+    // With mockSequence[4]=0.5 and maxNeuronId=10: floor(0.5 * 11) = 5
+    expect(parsed.targetId).toBe(5)
     expect(parsed.mode).toBe(EvolvedNeuronModes.ADD)
   })
 
