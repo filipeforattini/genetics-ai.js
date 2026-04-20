@@ -357,6 +357,9 @@ class SnakeAI extends Individual {
   }
 
   castRay(rayIdx) {
+    if (!this.head || !this.direction) {
+      return { wall: 0, food: 0, body: 0 }
+    }
     const stamp = this.steps
     if (this._rayCacheStamp !== stamp) {
       this._rayCacheStamp = stamp

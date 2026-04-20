@@ -156,10 +156,10 @@ function getNumericArg(...flags) {
 
 const CLI_MAX_GENERATIONS = getNumericArg('--max-generations', '--generations')
 const GENERATIONS = CLI_MAX_GENERATIONS ?? Infinity
-const FITNESS_RUNS = 5  // Number of game runs to average for fitness (consistency!)
+const FITNESS_RUNS = Number(process.env.SNAKE_RUNS) || 5
 const ACTION_COUNT = 3
 const BASE_NEURON_COUNT = 50
-const POPULATION_SIZE = 300
+const POPULATION_SIZE = Number(process.env.SNAKE_POPULATION) || 300
 const WARM_START_CHAMPION_CLONES = 0  // set >0 if you want to seed champions again
 const ENABLE_ADVANCED_BASES = true
 
@@ -254,10 +254,22 @@ function ensureAdvancedBases(genome, context = {}) {
     moduleNeurons: context.moduleNeurons ?? ADVANCED_BASE_THRESHOLDS.moduleNeurons
   }
 
+  // Safety cap: some advanced base encodings can be corrupted by subsequent
+  // appends (re-parsed as a different type). Without this cap a failing
+  // generator would loop forever. Bails after target*8 attempts and logs once.
+  const warned = new Set()
   const ensureCount = (type, target, generator) => {
     const desired = Math.max(0, target)
-    while (genome.countBasesByType(type) < desired) {
+    const maxAttempts = Math.max(1, desired * 8)
+    let attempts = 0
+    while (genome.countBasesByType(type) < desired && attempts < maxAttempts) {
       appendBase(genome, generator())
+      attempts++
+    }
+    if (attempts >= maxAttempts && !warned.has(type)) {
+      warned.add(type)
+      const got = genome.countBasesByType(type)
+      console.warn(`[ensureAdvancedBases] gave up on '${type}' at ${got}/${desired} after ${attempts} attempts — likely base-encoding bug`)
     }
   }
 
@@ -625,6 +637,11 @@ class SnakeAI extends Individual {
   // 8-direction raycast relative to current heading. Returns {wall, food, body}
   // per ray, each as 1/steps_to_target (0 if not seen before wall).
   castRay(rayIdx) {
+    // Individual's brain build invokes sensor ticks before reset() runs,
+    // so directionIndex/head may still be undefined on first call.
+    if (!this.head || this.directionIndex === undefined) {
+      return { wall: 0, food: 0, body: 0 }
+    }
     const stamp = this.steps
     if (this._rayCacheStamp !== stamp) {
       this._rayCacheStamp = stamp
