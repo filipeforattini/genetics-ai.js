@@ -8,22 +8,12 @@ const __dirname = path.dirname(__filename)
 const DEFAULT_CHAMPION_FILE = path.join(__dirname, 'snake-champion.json')
 let REPLAY_NEURON_COUNT = 50
 
+// 24 directional sensors: 8 rays × 3 channels (wall, food, body)
+const RAY_NAMES = ['Fwd', 'FwdR', 'R', 'BackR', 'Back', 'BackL', 'L', 'FwdL']
 const DEFAULT_SENSOR_NAMES = [
-  'Head X Norm', 'Head Y Norm',
-  'Food X Norm', 'Food Y Norm',
-  'Food Offset X', 'Food Offset Y',
-  'Food Forward', 'Food Side',
-  'Heading Cos', 'Heading Sin',
-  'Facing Cos', 'Facing Sin',
-  'Food Distance', 'Food Delta', 'Food Trend',
-  'Steps Since', 'Steps Trend', 'Food Value',
-  'Free Forward Dist', 'Free Left Dist', 'Free Right Dist',
-  'Danger Forward', 'Danger Left', 'Danger Right',
-  'Corridor Forward', 'Corridor Left', 'Corridor Right',
-  'Wall North Dist', 'Wall South Dist', 'Wall East Dist', 'Wall West Dist',
-  'Body Front Density', 'Body Back Density', 'Body Left Density', 'Body Right Density',
-  'Local Free 3', 'Local Free 5',
-  'Curvature', 'Exploration Delta'
+  ...RAY_NAMES.map(n => `Wall ${n}`),
+  ...RAY_NAMES.map(n => `Food ${n}`),
+  ...RAY_NAMES.map(n => `Body ${n}`)
 ]
 
 const DEFAULT_ACTION_NAMES = ['Forward', 'Left', 'Right']
@@ -159,50 +149,23 @@ function configureReplayEnvironment({ gridSize, maxSteps, level } = {}) {
 }
 
 class SnakeAI extends Individual {
+  static RAY_OFFSETS_BY_HEADING = {
+    0: [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]],
+    1: [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]],
+    2: [[0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1], [1, 0], [1, 1]],
+    3: [[-1, 0], [-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1]]
+  }
+
   constructor(options) {
+    const rayTick = (channel, rayIdx) => () => this.castRay(rayIdx)[channel]
+    const sensorTicks = []
+    for (let r = 0; r < 8; r++) sensorTicks.push({ id: r, tick: rayTick('wall', r) })
+    for (let r = 0; r < 8; r++) sensorTicks.push({ id: r + 8, tick: rayTick('food', r) })
+    for (let r = 0; r < 8; r++) sensorTicks.push({ id: r + 16, tick: rayTick('body', r) })
+
     super({
       ...options,
-      sensors: [
-        { id: 0, tick: () => this.getSpatialCache().headNorm.x },
-        { id: 1, tick: () => this.getSpatialCache().headNorm.y },
-        { id: 2, tick: () => this.getSpatialCache().foodNorm.x },
-        { id: 3, tick: () => this.getSpatialCache().foodNorm.y },
-        { id: 4, tick: () => this.getSpatialCache().foodOffset.dx },
-        { id: 5, tick: () => this.getSpatialCache().foodOffset.dy },
-        { id: 6, tick: () => this.getSpatialCache().foodProjection.forward },
-        { id: 7, tick: () => this.getSpatialCache().foodProjection.side },
-        { id: 8, tick: () => this.getSpatialCache().heading.cos },
-        { id: 9, tick: () => this.getSpatialCache().heading.sin },
-        { id: 10, tick: () => this.getSpatialCache().facing.cos },
-        { id: 11, tick: () => this.getSpatialCache().facing.sin },
-        { id: 12, tick: () => this.getSpatialCache().foodDistance },
-        { id: 13, tick: () => this.getSpatialCache().foodDelta },
-        { id: 14, tick: () => this.getSpatialCache().foodTrend },
-        { id: 15, tick: () => this.getSpatialCache().stepsSince },
-        { id: 16, tick: () => this.getSpatialCache().stepsTrend },
-        { id: 17, tick: () => this.getSpatialCache().foodValue },
-        { id: 18, tick: () => this.getSpatialCache().freeDistances.forward },
-        { id: 19, tick: () => this.getSpatialCache().freeDistances.left },
-        { id: 20, tick: () => this.getSpatialCache().freeDistances.right },
-        { id: 21, tick: () => this.getSpatialCache().danger.forward },
-        { id: 22, tick: () => this.getSpatialCache().danger.left },
-        { id: 23, tick: () => this.getSpatialCache().danger.right },
-        { id: 24, tick: () => this.getSpatialCache().corridors.forward },
-        { id: 25, tick: () => this.getSpatialCache().corridors.left },
-        { id: 26, tick: () => this.getSpatialCache().corridors.right },
-        { id: 27, tick: () => this.getSpatialCache().wallDistances.north },
-        { id: 28, tick: () => this.getSpatialCache().wallDistances.south },
-        { id: 29, tick: () => this.getSpatialCache().wallDistances.east },
-        { id: 30, tick: () => this.getSpatialCache().wallDistances.west },
-        { id: 31, tick: () => this.getSpatialCache().bodyDensity.front },
-        { id: 32, tick: () => this.getSpatialCache().bodyDensity.back },
-        { id: 33, tick: () => this.getSpatialCache().bodyDensity.left },
-        { id: 34, tick: () => this.getSpatialCache().bodyDensity.right },
-        { id: 35, tick: () => this.getSpatialCache().localFree.radius1 },
-        { id: 36, tick: () => this.getSpatialCache().localFree.radius2 },
-        { id: 37, tick: () => this.getSpatialCache().curvature },
-        { id: 38, tick: () => this.getSpatialCache().explorationDelta }
-      ],
+      sensors: sensorTicks,
       actions: [
         { id: 0, tick: () => this.turn('forward') },   // Continue straight
         { id: 1, tick: () => this.turn('left') },      // Turn left 90°
@@ -393,9 +356,47 @@ class SnakeAI extends Individual {
     return this.snakeSet.has(`${x},${y}`)
   }
 
+  castRay(rayIdx) {
+    const stamp = this.steps
+    if (this._rayCacheStamp !== stamp) {
+      this._rayCacheStamp = stamp
+      this._rayCache = new Array(8)
+    }
+    const cached = this._rayCache[rayIdx]
+    if (cached !== undefined) return cached
+
+    const headingIdx = { up: 0, right: 1, down: 2, left: 3 }[this.direction] ?? 0
+    const offsets = SnakeAI.RAY_OFFSETS_BY_HEADING[headingIdx]
+    const [dx, dy] = offsets[rayIdx]
+    let x = this.head.x
+    let y = this.head.y
+    let steps = 0
+    let food = 0
+    let body = 0
+
+    while (true) {
+      steps++
+      x += dx
+      y += dy
+      if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) {
+        const result = { wall: 1 / steps, food, body }
+        this._rayCache[rayIdx] = result
+        return result
+      }
+      if (food === 0 && this.food && x === this.food.x && y === this.food.y) {
+        food = 1 / steps
+      }
+      if (body === 0 && this.isOnSnake(x, y)) {
+        body = 1 / steps
+      }
+    }
+  }
+
   invalidateSpatialCache() {
     this._spatialCache = null
     this._spatialCacheStamp = -1
+    this._rayCacheStamp = -1
+    this._rayCache = null
   }
 
   getSpatialCache() {
