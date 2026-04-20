@@ -1639,8 +1639,42 @@ async function watchSnake(snake) {
   process.stdout.write(summaryLines.join('\n'))
 }
 
+function parseSvgFlag() {
+  for (const arg of process.argv.slice(2)) {
+    if (arg.startsWith('--svg=')) return arg.slice('--svg='.length)
+    if (arg === '--svg') return 'snake-replay.svg'
+  }
+  return null
+}
+
+async function exportReplayToSVG(snake, outPath) {
+  const { framesToSVG } = await import('./snake-svg.js')
+  if (typeof snake.reset === 'function') snake.reset()
+  const frames = []
+  const snapshot = () => ({
+    step: snake.steps ?? 0,
+    foodEaten: snake.foodEaten ?? 0,
+    food: { x: snake.food.x, y: snake.food.y },
+    snake: snake.snake.map(seg => ({ x: seg.x, y: seg.y }))
+  })
+  frames.push(snapshot())
+  while (snake.alive && snake.steps < MAX_STEPS) {
+    snake.tick()
+    snake.move()
+    snake.steps = (snake.steps ?? 0) + 1
+    frames.push(snapshot())
+  }
+  const svg = framesToSVG(frames, {
+    gridSize: GRID_SIZE,
+    title: `Snake replay — food ${snake.foodEaten}, steps ${snake.steps}`
+  })
+  fs.writeFileSync(outPath, svg)
+  console.log(`🎞️  SVG replay saved: ${outPath} (${frames.length} frames)`)
+}
+
 async function replay() {
-  const requestedPath = process.argv[2]
+  const nonFlagArgs = process.argv.slice(2).filter(a => !a.startsWith('--'))
+  const requestedPath = nonFlagArgs[0]
   const filePath = requestedPath
     ? path.resolve(process.cwd(), requestedPath)
     : DEFAULT_CHAMPION_FILE
@@ -1680,6 +1714,12 @@ async function replay() {
     genome,
     neurons: championConfig.neurons || REPLAY_NEURON_COUNT
   })
+
+  const svgPath = parseSvgFlag()
+  if (svgPath) {
+    await exportReplayToSVG(snake, path.resolve(process.cwd(), svgPath))
+    return
+  }
 
   await watchSnake(snake)
 }

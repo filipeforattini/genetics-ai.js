@@ -46,3 +46,4 @@ export * from './activation-lut.class.js'
 // Developer Tools (DEVX)
 export * from './devtools/performance-profiler.class.js'
 export * from './devtools/brain-visualizer.class.js'
+export * from './devtools/fitness-plot.js'

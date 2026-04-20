@@ -7,7 +7,8 @@ import {
   PlasticityBase,
   EvolvedNeuronBase,
   AttributeBase,
-  ModuleBase
+  ModuleBase,
+  sparkline
 } from '../../../src/index.js'
 import fs from 'fs'
 import path from 'node:path'
@@ -1844,6 +1845,10 @@ async function evolve() {
       `Fit=${bestFitness.toString().padStart(8)} | ` +
       `Avg=${Math.floor(avgFit).toString().padStart(7)}`
     )
+
+    if (gen.history.length >= 2 && i % 5 === 0) {
+      console.log(`     ${sparkline(gen.history, { metric: 'best', width: 60 })}`)
+    }
 
     // Stop if stuck for too long
     if (noImprovementCount >= 150) {

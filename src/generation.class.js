@@ -89,6 +89,11 @@ export class Generation {
     this.useSpeciation = useSpeciation
     this.speciation = useSpeciation ? new Speciation(speciationOptions) : null
 
+    // Per-generation fitness stats, appended automatically in next()/nextAsync()
+    // and inherited by the returned generation so a single long-running
+    // loop can read the full history via gen.history.
+    this.history = []
+
     this.individualArgs = {
       hooks: {},
       sensors: [],
@@ -361,6 +366,53 @@ export class Generation {
   }
 
   /**
+   * Snapshot per-generation fitness stats and append to this.history.
+   * Called automatically by next()/nextAsync(); safe to call manually
+   * after fitness evaluation if you use a custom loop.
+   * Returns the snapshot (or null when the population has no finite fitnesses).
+   */
+  recordStats() {
+    const fits = []
+    for (const ind of this.population) {
+      const f = typeof ind.fitness === 'function' ? ind.fitness() : ind.fitness
+      if (Number.isFinite(f)) fits.push(f)
+    }
+    if (fits.length === 0) return null
+
+    const sorted = [...fits].sort((a, b) => a - b)
+    let sum = 0
+    for (const v of fits) sum += v
+    const mean = sum / fits.length
+    let variance = 0
+    for (const v of fits) variance += (v - mean) ** 2
+    variance /= fits.length
+
+    const snapshot = {
+      generation: this.generationNumber,
+      populationSize: fits.length,
+      best: sorted[sorted.length - 1],
+      worst: sorted[0],
+      mean,
+      median: sorted[Math.floor(sorted.length / 2)],
+      stdDev: Math.sqrt(variance),
+      timestamp: Date.now()
+    }
+    this.history.push(snapshot)
+    return snapshot
+  }
+
+  /**
+   * Serialize history to CSV.
+   */
+  historyToCSV() {
+    const header = 'generation,populationSize,best,worst,mean,median,stdDev,timestamp'
+    const rows = this.history.map(s =>
+      `${s.generation},${s.populationSize},${s.best},${s.worst},${s.mean},${s.median},${s.stdDev},${s.timestamp}`
+    )
+    return [header, ...rows].join('\n')
+  }
+
+  /**
    * Normalize fitness scores to [0, 1] range
    * This ensures consistent selection pressure regardless of fitness scale
    */
@@ -403,11 +455,15 @@ export class Generation {
       this.hooks.beforeNext.call(this, this)
     }
 
+    // Snapshot stats for the current population before mutating things.
+    this.recordStats()
+
     // Increment generation counter
     this.generationNumber++
 
     const nextGen = Generation.from({ ...this.options })
     nextGen.generationNumber = this.generationNumber
+    nextGen.history = this.history
 
     // === STEP 0: Normalize fitness for consistent selection pressure ===
     this.normalizeFitness(this.population)
@@ -792,11 +848,14 @@ export class Generation {
         if (isPromise(hookResult)) await hookResult
       }
 
+      this.recordStats()
+
       // Increment generation counter
       this.generationNumber++
 
       const nextGen = Generation.from({ ...this.options })
       nextGen.generationNumber = this.generationNumber
+      nextGen.history = this.history
 
       // === STEP 0: Normalize fitness (supports async fitness) ===
       await this.normalizeFitnessAsync(this.population)
