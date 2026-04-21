@@ -101,9 +101,9 @@ export class Genome {
     ]
 
     while (position < totalBits - 3) {
-      // PARSING PRIORITY: Try basic bases FIRST to avoid false positives!
-      // Basic bases (connection/bias) are much more common than advanced bases.
-      // Advanced parsers can false-positive on connection weights with certain bit patterns.
+      // Try basic bases first — they're the common case. The basic parser
+      // returns null when it sees the advanced-base sentinel (0b11110) in
+      // the config bits so we fall through to the advanced parsers below.
       const base = Base.fromBitBuffer(this.buffer, position)
       if (base) {
         bases.push(base)
@@ -112,7 +112,6 @@ export class Genome {
         continue
       }
 
-      // Only try advanced parsers if basic parsing failed
       let parsed = null
       for (const Parser of advancedParsers) {
         parsed = Parser.fromBitBuffer(this.buffer, position)
@@ -126,7 +125,18 @@ export class Genome {
         continue
       }
 
-      // Neither basic nor advanced parser matched - stop
+      // Sentinel present but no advanced parser matched — likely the tail of
+      // a mutation that flipped a connection weight into 0b11110 or corrupted
+      // an advanced base's inner bits. Recover by parsing as a weight-15
+      // connection so we preserve alignment with subsequent bases.
+      const fallback = Base.fromBitBuffer(this.buffer, position, { allowSentinel: true })
+      if (fallback) {
+        bases.push(fallback)
+        positions.push(position)
+        position += fallback.bitLength
+        continue
+      }
+
       break
     }
 
@@ -162,8 +172,7 @@ export class Genome {
       LearningRuleBase
     ]
 
-    while (position < totalBits - 3) {  // Need at least 3 bits for type
-      // PARSING PRIORITY: Try basic bases FIRST to avoid false positives!
+    while (position < totalBits - 3) {
       const base = Base.fromBitBuffer(this.buffer, position)
       if (base) {
         yield base
@@ -171,7 +180,6 @@ export class Genome {
         continue
       }
 
-      // Only try advanced parsers if basic parsing failed
       let parsed = null
       for (const Parser of advancedParsers) {
         parsed = Parser.fromBitBuffer(this.buffer, position)
@@ -184,7 +192,15 @@ export class Genome {
         continue
       }
 
-      // Neither matched - stop
+      // Sentinel present but no advanced parser matched — fall back to
+      // parsing as a weight-15 connection (mutation-recovery path).
+      const fallback = Base.fromBitBuffer(this.buffer, position, { allowSentinel: true })
+      if (fallback) {
+        yield fallback
+        position += fallback.bitLength
+        continue
+      }
+
       break
     }
   }
@@ -500,7 +516,8 @@ export class Genome {
         const position = this._basePositions[i]
         const oldWeight = base.data || 0
         const creep = Math.floor((Math.random() - 0.5) * 2 * maxCreep)
-        const newWeight = Math.max(0, Math.min(15, oldWeight + creep))
+        // Cap at 14; 15 would produce the advanced-base sentinel (0b11110).
+        const newWeight = Math.max(0, Math.min(14, oldWeight + creep))
 
         if (newWeight !== oldWeight) {
           for (let b = 0; b < 4; b++) {
@@ -672,11 +689,11 @@ export class Genome {
       target: { type: 'neuron', id: newNeuronId }
     }
     
-    // Connection 2: NewNeuron -> Target (Weight = Max/Identity)
-    // We use weight 15 (max) to simulate "identity" or strong passthrough
+    // Connection 2: NewNeuron -> Target (max weight for "identity" passthrough).
+    // 14 instead of 15 because 15 would collide with the advanced-base sentinel.
     const conn2 = {
       type: 'connection',
-      data: 15, 
+      data: 14,
       source: { type: 'neuron', id: newNeuronId },
       target: { ...oldConn.target }
     }

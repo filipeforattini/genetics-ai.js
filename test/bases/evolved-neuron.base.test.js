@@ -21,7 +21,7 @@ describe('EvolvedNeuronBase', () => {
       mode: EvolvedNeuronModes.ADD,
       numOps: 3,
       operationIds: [1, 5, 12],
-      bitLength: 42
+      bitLength: 43
     })
   })
 

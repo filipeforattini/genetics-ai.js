@@ -12,23 +12,40 @@ import { AttributeBase } from './bases/attribute.base.js'
  */
 export class Base {
   /**
+   * Advanced-base sentinel (5 bits). Every advanced base type
+   * (memory_cell, plasticity, learning_rule, module, evolved_neuron)
+   * begins with this pattern so the basic parser can unambiguously
+   * defer to the advanced parsers. Connections consequently cannot
+   * have weight=15 (which would produce configBits=0b11110).
+   */
+  static ADVANCED_SENTINEL = 0b11110
+  static MAX_CONNECTION_WEIGHT = 14
+
+  /**
    * Parse base from BitBuffer
    * Much faster than string parsing
    * Supports all base types: connection, bias, attribute, evolved_neuron, learning_rule, etc.
+   *
+   * @param {BitBuffer} buffer
+   * @param {number} position
+   * @param {Object} [opts]
+   * @param {boolean} [opts.allowSentinel] - parse 0b11110 as a weight-15 connection
+   *   instead of deferring. Used as a fallback after advanced parsers reject a
+   *   mutation-corrupted sentinel prefix.
    */
-  static fromBitBuffer(buffer, position = 0) {
+  static fromBitBuffer(buffer, position = 0, opts = {}) {
     // Check if we have enough bits
     const totalBits = buffer.bitLength || (buffer.buffer.length * 8)
     if (position + 3 > totalBits) return null
 
-    // PARSING PRIORITY: Try basic bases first to avoid false positives!
-    // Basic bases (connection/bias) are much more common than advanced bases
-    // Trying advanced bases first causes false positives
-
-    // Try basic parsing FIRST (connections and biases)
     // Read 5-bit config
     if (position + 5 > totalBits) return null
     const configBits = buffer.readBits(5, position)
+
+    // Reserved sentinel: normally defer to advanced base parsers. Callers can
+    // opt into basic parsing (as a "weight 15" connection) for recovery.
+    if (configBits === Base.ADVANCED_SENTINEL && !opts.allowSentinel) return null
+
     const lastBit = configBits & 1
 
     // Determine base type: connection (lastBit=0) or bias (lastBit=1)
@@ -210,8 +227,10 @@ export class Base {
         throw new Error('Connection base must have a valid target with id')
       }
 
-      // Config byte (5 bits)
-      const data = (base.data !== undefined) ? base.data : 0
+      // Config byte (5 bits). Clamp weight so we never emit the advanced-base
+      // sentinel (configBits=0b11110 would be weight=15 + typeBit=0).
+      const rawData = (base.data !== undefined) ? base.data : 0
+      const data = Math.min(rawData & 0b1111, Base.MAX_CONNECTION_WEIGHT)
       const typeBit = 0  // connection type
       const config = (data & 0b1111) << 1 | typeBit
       buffer.writeBits(config, 5)
@@ -277,7 +296,7 @@ export class Base {
       
       return Base.toBitBuffer({
         type: 'connection',
-        data: Math.floor(Math.random() * 16),  // 0 to 15
+        data: Math.floor(Math.random() * (Base.MAX_CONNECTION_WEIGHT + 1)),  // 0 to 14 (15 reserved)
         source: {
           id: Math.floor(Math.random() * (useNeuronSource ? neurons : sensors)),
           type: useNeuronSource ? 'neuron' : 'sensor'
@@ -328,7 +347,7 @@ export class Base {
       
       return Base.toBitBuffer({
         type: 'connection',
-        data: Math.floor(Math.random() * 16),
+        data: Math.floor(Math.random() * (Base.MAX_CONNECTION_WEIGHT + 1)),
         source: {
           id: Math.floor(Math.random() * (useNeuronSource ? neurons : sensors)),
           type: useNeuronSource ? 'neuron' : 'sensor'

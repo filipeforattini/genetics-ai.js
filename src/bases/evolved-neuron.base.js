@@ -4,18 +4,18 @@ import { BitBuffer } from '../bitbuffer.class.js'
  * EvolvedNeuronBase - Bit-level encoding for programmable neurons
  *
  * Layout:
- * [type:3=0b101][sentinel:4=0b1110][targetId:10][mode:2][numOps:5][op1:6]...[opN:6]
+ * [sentinel:5=0b11110][type:3=0b110][targetId:10][mode:2][numOps:5][op1:6]...[opN:6]
  *
- * - type identifies programmable neurons within the genome stream
- * - sentinel prevents false positives when scanning mixed base types
+ * - sentinel: shared advanced-base marker that tells the basic parser to defer
+ * - type: 110 — distinct from plasticity (101) within the advanced namespace
  * - targetId marks the neuron that will receive the custom tick
  * - mode defines how opcode output combines with the classical input
  * - numOps is the number of primitive opcodes encoded (1-32)
  */
 
-const TYPE_ID = 0b101
-const SENTINEL = 0b1110
-const HEADER_BITS = 24
+const ADVANCED_SENTINEL = 0b11110
+const TYPE_ID = 0b110
+const HEADER_BITS = 25
 const MAX_OPS = 32
 
 export const EvolvedNeuronModes = {
@@ -135,15 +135,12 @@ export class EvolvedNeuronBase {
     const totalBits = buffer.bitLength || (buffer.buffer.length * 8)
     if (position + HEADER_BITS > totalBits) return null
 
-    const typeId = buffer.readBits(3, position)
-    if (typeId !== TYPE_ID) return null
+    if (buffer.readBits(5, position) !== ADVANCED_SENTINEL) return null
+    if (buffer.readBits(3, position + 5) !== TYPE_ID) return null
 
-    const sentinel = buffer.readBits(4, position + 3)
-    if (sentinel !== SENTINEL) return null
-
-    const targetId = buffer.readBits(10, position + 7)
-    const mode = this.resolveMode(buffer.readBits(2, position + 17))
-    const numOps = buffer.readBits(5, position + 19)
+    const targetId = buffer.readBits(10, position + 8)
+    const mode = this.resolveMode(buffer.readBits(2, position + 18))
+    const numOps = buffer.readBits(5, position + 20)
 
     const bitLength = HEADER_BITS + (numOps * 6)
     if (position + bitLength > totalBits) return null
@@ -171,11 +168,11 @@ export class EvolvedNeuronBase {
     const bitLength = HEADER_BITS + (numOps * 6)
     const buffer = new BitBuffer(bitLength)
 
-    buffer.writeBits(TYPE_ID, 3)
-    buffer.writeBits(SENTINEL, 4, 3)
-    buffer.writeBits(base.targetId & 0b1111111111, 10, 7)
-    buffer.writeBits(this.resolveMode(base.mode), 2, 17)
-    buffer.writeBits(numOps & 0b11111, 5, 19)
+    buffer.writeBits(ADVANCED_SENTINEL, 5)
+    buffer.writeBits(TYPE_ID, 3, 5)
+    buffer.writeBits(base.targetId & 0b1111111111, 10, 8)
+    buffer.writeBits(this.resolveMode(base.mode), 2, 18)
+    buffer.writeBits(numOps & 0b11111, 5, 20)
 
     for (let i = 0; i < numOps; i++) {
       const opId = operationIds[i] & 0b111111
@@ -239,18 +236,23 @@ export class EvolvedNeuronBase {
       numPrimitives = PRIMITIVES.length
     } = options
 
-    const currentOps = buffer.readBits(5, position + 19)
+    // Header layout: sentinel(5) + typeId(3) + targetId(10) + mode(2) + numOps(5)
+    const TARGET_OFFSET = 8
+    const MODE_OFFSET = 18
+    const NUM_OPS_OFFSET = 20
+
+    const currentOps = buffer.readBits(5, position + NUM_OPS_OFFSET)
 
     if (Math.random() < mutationRate * 4) {
-      const target = buffer.readBits(10, position + 7)
+      const target = buffer.readBits(10, position + TARGET_OFFSET)
       const delta = (Math.random() < 0.5 ? -1 : 1) * Math.ceil(Math.random() * 4)
       const nextTarget = Math.max(0, Math.min(maxNeuronId, target + delta))
-      buffer.writeBits(nextTarget, 10, position + 7)
+      buffer.writeBits(nextTarget, 10, position + TARGET_OFFSET)
     }
 
     if (Math.random() < mutationRate * 4) {
       const newMode = Math.floor(Math.random() * this.modeCount)
-      buffer.writeBits(newMode, 2, position + 17)
+      buffer.writeBits(newMode, 2, position + MODE_OFFSET)
     }
 
     for (let i = 0; i < currentOps; i++) {
@@ -263,7 +265,7 @@ export class EvolvedNeuronBase {
     if (currentOps < MAX_OPS && Math.random() < mutationRate * 0.5) {
       const newOp = Math.floor(Math.random() * numPrimitives) & 0b111111
       buffer.writeBits(newOp, 6, position + HEADER_BITS + (currentOps * 6))
-      buffer.writeBits(currentOps + 1, 5, position + 19)
+      buffer.writeBits(currentOps + 1, 5, position + NUM_OPS_OFFSET)
     }
   }
 

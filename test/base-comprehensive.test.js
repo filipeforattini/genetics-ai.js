@@ -3,18 +3,19 @@ import { Genome } from '../src/genome.class.js'
 
 describe('Comprehensive Base Testing', () => {
   describe('Connection bases - all combinations', () => {
-    test('all data values (0-15)', () => {
-      for (let data = 0; data <= 15; data++) {
+    test('all data values (0-14)', () => {
+      // 15 is reserved as the advanced-base sentinel; toBitBuffer clamps to 14.
+      for (let data = 0; data <= 14; data++) {
         const base = {
           type: 'connection',
           data,
           source: { type: 'sensor', id: 0 },
           target: { type: 'neuron', id: 0 }
         }
-        
+
         const encoded = Base.toString(base)
         const decoded = Base.fromString(encoded)
-        
+
         expect(decoded.type).toBe('connection')
         expect(decoded.data).toBe(data)
         expect(decoded.source).toEqual(base.source)
@@ -184,7 +185,7 @@ describe('Comprehensive Base Testing', () => {
   describe('Mixed genome sequences', () => {
     test('genome with all base types', () => {
       const bases = [
-        { type: 'connection', data: 15, source: { type: 'sensor', id: 255 }, target: { type: 'neuron', id: 255 } },
+        { type: 'connection', data: 14, source: { type: 'sensor', id: 255 }, target: { type: 'neuron', id: 255 } },
         { type: 'bias', data: 7, target: { type: 'action', id: 255 } },
         { type: 'attribute', data: 0, id: 15, value: 127 },
         { type: 'connection', data: 0, source: { type: 'neuron', id: 0 }, target: { type: 'action', id: 0 } },
@@ -263,7 +264,7 @@ describe('Comprehensive Base Testing', () => {
       // Test that max IDs work correctly
       const maxConnection = {
         type: 'connection',
-        data: 15,
+        data: 14,  // 15 reserved as advanced-base sentinel
         source: { type: 'neuron', id: 511 },
         target: { type: 'action', id: 511 }
       }

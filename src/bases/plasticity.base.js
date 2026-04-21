@@ -1,78 +1,43 @@
 import { BitBuffer } from '../bitbuffer.class.js'
 
+const ADVANCED_SENTINEL = 0b11110
+const TYPE_ID = 0b101
+
 /**
  * PlasticityBase - Bit-level encoding for meta-learning plasticity
  *
- * Format: [type:3='101'][targetId:9][level:4]
+ * Format: [sentinel:5=11110][type:3='101'][targetId:9][level:4]
  *
- * - type: 101 (Plasticity identifier)
- * - targetId: 0-511 neuron ID to make plastic
- * - level: 0-15 plasticity strength (how much weights can change)
- *
- * Plasticity controls meta-learning - how much a neuron's incoming
- * connections can adapt during the individual's lifetime. This is
- * separate from LearningRule which defines HOW weights change.
- * Plasticity defines HOW MUCH they can change.
- *
- * Example: Neuron #127 with high plasticity
- * 101 001111111 1010
- * │   │         │
- * │   │         └─ level: 10 (high)
- * │   └─ neuron #127
- * └─ type: Plasticity
- *
- * Total: 16 bits
+ * Total: 21 bits
  */
 export class PlasticityBase {
-  // Bit length constant
-  static BIT_LENGTH = 16
+  static BIT_LENGTH = 21
 
-  /**
-   * Parse plasticity from BitBuffer
-   * @param {BitBuffer} buffer - Source buffer
-   * @param {number} position - Bit position to start reading
-   * @returns {Object|null} Parsed base or null if invalid
-   */
   static fromBitBuffer(buffer, position = 0) {
     const totalBits = buffer.bitLength || (buffer.buffer.length * 8)
 
-    // Need exactly 16 bits
     if (position + PlasticityBase.BIT_LENGTH > totalBits) return null
+    if (buffer.readBits(5, position) !== ADVANCED_SENTINEL) return null
+    if (buffer.readBits(3, position + 5) !== TYPE_ID) return null
 
-    // Read type (3 bits) - should be 101
-    const typeId = buffer.readBits(3, position)
-    if (typeId !== 0b101) return null
-
-    // Read target neuron ID (9 bits)
-    const targetId = buffer.readBits(9, position + 3)
-
-    // Read plasticity level (4 bits)
-    const level = buffer.readBits(4, position + 12)
+    const targetId = buffer.readBits(9, position + 8)
+    const level = buffer.readBits(4, position + 17)
 
     return {
       type: 'plasticity',
       targetId,
       level,
       bitLength: PlasticityBase.BIT_LENGTH,
-      data: targetId  // Compatibility with Base class
+      data: targetId
     }
   }
 
-  /**
-   * Convert plasticity to BitBuffer
-   * @param {Object} base - Base object
-   * @returns {BitBuffer} Encoded buffer
-   */
   static toBitBuffer(base) {
     const buffer = new BitBuffer(PlasticityBase.BIT_LENGTH)
 
-    // Write type (3 bits): 101
-    buffer.writeBits(0b101, 3)
-
-    // Write target neuron ID (9 bits)
+    buffer.writeBits(ADVANCED_SENTINEL, 5)
+    buffer.writeBits(TYPE_ID, 3)
     buffer.writeBits(base.targetId & 0b111111111, 9)
-
-    // Write plasticity level (4 bits)
     buffer.writeBits(base.level & 0b1111, 4)
 
     return buffer
@@ -187,8 +152,8 @@ export class PlasticityBase {
    * @param {number} mutationRate - Mutation rate per bit
    */
   static mutateBinary(buffer, position, mutationRate = 0.01) {
-    // Bit-flip mutations
-    for (let i = 0; i < PlasticityBase.BIT_LENGTH; i++) {
+    const PREFIX_BITS = 8  // sentinel(5) + typeId(3) — stays intact
+    for (let i = PREFIX_BITS; i < PlasticityBase.BIT_LENGTH; i++) {
       if (Math.random() < mutationRate) {
         const currentBit = buffer.getBit(position + i)
         buffer.setBit(position + i, currentBit ? 0 : 1)

@@ -7,7 +7,8 @@ import {
   PlasticityBase,
   EvolvedNeuronBase,
   AttributeBase,
-  ModuleBase
+  ModuleBase,
+  sparkline
 } from '../../../src/index.js'
 import fs from 'fs'
 import path from 'node:path'
@@ -156,29 +157,20 @@ function getNumericArg(...flags) {
 
 const CLI_MAX_GENERATIONS = getNumericArg('--max-generations', '--generations')
 const GENERATIONS = CLI_MAX_GENERATIONS ?? Infinity
-const FITNESS_RUNS = 5  // Number of game runs to average for fitness (consistency!)
+const FITNESS_RUNS = Number(process.env.SNAKE_RUNS) || 5
 const ACTION_COUNT = 3
 const BASE_NEURON_COUNT = 50
-const POPULATION_SIZE = 300
+const POPULATION_SIZE = Number(process.env.SNAKE_POPULATION) || 300
 const WARM_START_CHAMPION_CLONES = 0  // set >0 if you want to seed champions again
 const ENABLE_ADVANCED_BASES = true
 
+// 24 directional sensors: 8 rays relative to heading × 3 channels (wall, food, body)
+// Ray order (clockwise from forward): fwd, fwd-R, R, back-R, back, back-L, L, fwd-L
+const RAY_NAMES = ['Fwd', 'FwdR', 'R', 'BackR', 'Back', 'BackL', 'L', 'FwdL']
 const SENSOR_NAMES = [
-  'Head X Norm', 'Head Y Norm',
-  'Food X Norm', 'Food Y Norm',
-  'Food Offset X', 'Food Offset Y',
-  'Food Forward', 'Food Side',
-  'Heading Cos', 'Heading Sin',
-  'Facing Cos', 'Facing Sin',
-  'Food Distance', 'Food Delta', 'Food Trend',
-  'Steps Since', 'Steps Trend', 'Food Value',
-  'Free Forward Dist', 'Free Left Dist', 'Free Right Dist',
-  'Danger Forward', 'Danger Left', 'Danger Right',
-  'Corridor Forward', 'Corridor Left', 'Corridor Right',
-  'Wall North Dist', 'Wall South Dist', 'Wall East Dist', 'Wall West Dist',
-  'Body Front Density', 'Body Back Density', 'Body Left Density', 'Body Right Density',
-  'Local Free 3', 'Local Free 5',
-  'Curvature', 'Exploration Delta'
+  ...RAY_NAMES.map(n => `Wall ${n}`),
+  ...RAY_NAMES.map(n => `Food ${n}`),
+  ...RAY_NAMES.map(n => `Body ${n}`)
 ]
 
 const SENSOR_COUNT = SENSOR_NAMES.length
@@ -263,10 +255,25 @@ function ensureAdvancedBases(genome, context = {}) {
     moduleNeurons: context.moduleNeurons ?? ADVANCED_BASE_THRESHOLDS.moduleNeurons
   }
 
+  // Safety cap: some advanced base encodings can be corrupted by subsequent
+  // appends (re-parsed as a different type). Without this cap a failing
+  // generator would loop forever. Bails after target*8 attempts and logs once.
+  const warned = new Set()
   const ensureCount = (type, target, generator) => {
     const desired = Math.max(0, target)
-    while (genome.countBasesByType(type) < desired) {
+    const maxAttempts = Math.max(1, desired * 8)
+    let attempts = 0
+    while (genome.countBasesByType(type) < desired && attempts < maxAttempts) {
       appendBase(genome, generator())
+      attempts++
+    }
+    // Post-mutation genomes sometimes lose advanced bases to bit flips that
+    // misalign the variable-length encoding. Surface only under SNAKE_DEBUG_BASES;
+    // in normal training we just move on with whatever count we reached.
+    if (attempts >= maxAttempts && !warned.has(type) && process.env.SNAKE_DEBUG_BASES) {
+      warned.add(type)
+      const got = genome.countBasesByType(type)
+      console.warn(`[ensureAdvancedBases] ${type} at ${got}/${desired} after ${attempts} attempts`)
     }
   }
 
@@ -414,50 +421,25 @@ class SnakeAI extends Individual {
     left: 3
   }
 
+  // Ray offsets clockwise from forward, per heading (up/right/down/left).
+  // Order: [fwd, fwdR, R, backR, back, backL, L, fwdL]
+  static RAY_OFFSETS_BY_HEADING = {
+    0: [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]],
+    1: [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]],
+    2: [[0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1], [1, 0], [1, 1]],
+    3: [[-1, 0], [-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1]]
+  }
+
   constructor(options) {
+    const rayTick = (channel, rayIdx) => () => this.castRay(rayIdx)[channel]
+    const sensorTicks = []
+    for (let r = 0; r < 8; r++) sensorTicks.push({ id: r, tick: rayTick('wall', r) })
+    for (let r = 0; r < 8; r++) sensorTicks.push({ id: r + 8, tick: rayTick('food', r) })
+    for (let r = 0; r < 8; r++) sensorTicks.push({ id: r + 16, tick: rayTick('body', r) })
+
     super({
       ...options,
-      sensors: [
-        { id: 0, tick: () => this.getSpatialCache().headNorm.x },
-        { id: 1, tick: () => this.getSpatialCache().headNorm.y },
-        { id: 2, tick: () => this.getSpatialCache().foodNorm.x },
-        { id: 3, tick: () => this.getSpatialCache().foodNorm.y },
-        { id: 4, tick: () => this.getSpatialCache().foodOffset.dx },
-        { id: 5, tick: () => this.getSpatialCache().foodOffset.dy },
-        { id: 6, tick: () => this.getSpatialCache().foodProjection.forward },
-        { id: 7, tick: () => this.getSpatialCache().foodProjection.side },
-        { id: 8, tick: () => this.getSpatialCache().heading.cos },
-        { id: 9, tick: () => this.getSpatialCache().heading.sin },
-        { id: 10, tick: () => this.getSpatialCache().facing.cos },
-        { id: 11, tick: () => this.getSpatialCache().facing.sin },
-        { id: 12, tick: () => this.getSpatialCache().foodDistance },
-        { id: 13, tick: () => this.getSpatialCache().foodDelta },
-        { id: 14, tick: () => this.getSpatialCache().foodTrend },
-        { id: 15, tick: () => this.getSpatialCache().stepsSince },
-        { id: 16, tick: () => this.getSpatialCache().stepsTrend },
-        { id: 17, tick: () => this.getSpatialCache().foodValue },
-        { id: 18, tick: () => this.getSpatialCache().freeDistances.forward },
-        { id: 19, tick: () => this.getSpatialCache().freeDistances.left },
-        { id: 20, tick: () => this.getSpatialCache().freeDistances.right },
-        { id: 21, tick: () => this.getSpatialCache().danger.forward },
-        { id: 22, tick: () => this.getSpatialCache().danger.left },
-        { id: 23, tick: () => this.getSpatialCache().danger.right },
-        { id: 24, tick: () => this.getSpatialCache().corridors.forward },
-        { id: 25, tick: () => this.getSpatialCache().corridors.left },
-        { id: 26, tick: () => this.getSpatialCache().corridors.right },
-        { id: 27, tick: () => this.getSpatialCache().wallDistances.north },
-        { id: 28, tick: () => this.getSpatialCache().wallDistances.south },
-        { id: 29, tick: () => this.getSpatialCache().wallDistances.east },
-        { id: 30, tick: () => this.getSpatialCache().wallDistances.west },
-        { id: 31, tick: () => this.getSpatialCache().bodyDensity.front },
-        { id: 32, tick: () => this.getSpatialCache().bodyDensity.back },
-        { id: 33, tick: () => this.getSpatialCache().bodyDensity.left },
-        { id: 34, tick: () => this.getSpatialCache().bodyDensity.right },
-        { id: 35, tick: () => this.getSpatialCache().localFree.radius1 },
-        { id: 36, tick: () => this.getSpatialCache().localFree.radius2 },
-        { id: 37, tick: () => this.getSpatialCache().curvature },
-        { id: 38, tick: () => this.getSpatialCache().explorationDelta }
-      ],
+      sensors: sensorTicks,
       actions: [
         { id: 0, tick: () => this.turn('forward') },   // Continue straight
         { id: 1, tick: () => this.turn('left') },      // Turn left 90°
@@ -656,9 +638,56 @@ class SnakeAI extends Individual {
     return this.snakeSet.has(`${x},${y}`)
   }
 
+  // 8-direction raycast relative to current heading. Returns {wall, food, body}
+  // per ray, each as 1/steps_to_target (0 if not seen before wall).
+  castRay(rayIdx) {
+    // Individual's brain build invokes sensor ticks before reset() runs,
+    // so directionIndex/head may still be undefined on first call.
+    const dirIdx = this.directionIndex
+    if (!this.head || !Number.isInteger(dirIdx) || dirIdx < 0 || dirIdx > 3) {
+      return { wall: 0, food: 0, body: 0 }
+    }
+    const stamp = this.steps ?? 0
+    // Initialize or refresh the ray cache. `_rayCache` can be undefined on
+    // the very first call (constructor defers allocation).
+    if (!this._rayCache || this._rayCacheStamp !== stamp) {
+      this._rayCacheStamp = stamp
+      this._rayCache = new Array(8)
+    }
+    const cached = this._rayCache[rayIdx]
+    if (cached !== undefined) return cached
+
+    const offsets = SnakeAI.RAY_OFFSETS_BY_HEADING[dirIdx]
+    const [dx, dy] = offsets[rayIdx]
+    let x = this.head.x
+    let y = this.head.y
+    let steps = 0
+    let food = 0
+    let body = 0
+
+    while (true) {
+      steps++
+      x += dx
+      y += dy
+      if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) {
+        const result = { wall: 1 / steps, food, body }
+        this._rayCache[rayIdx] = result
+        return result
+      }
+      if (food === 0 && this.food && x === this.food.x && y === this.food.y) {
+        food = 1 / steps
+      }
+      if (body === 0 && this.isOnSnake(x, y)) {
+        body = 1 / steps
+      }
+    }
+  }
+
   invalidateSpatialCache() {
     this._spatialCache = null
     this._spatialCacheStamp = -1
+    this._rayCacheStamp = -1
+    this._rayCache = null
   }
 
   getSpatialCache() {
@@ -1165,18 +1194,19 @@ class SnakeAI extends Individual {
   }
 
   turn(action) {
-    // RELATIVE ACTIONS - much easier to learn!
-    // ⚡ PERFORMANCE: Use cached directionIndex ao invés de indexOf()
     this.lastTurnDelta = 0
+    // Actions may fire during brain construction (before reset()). Guard against
+    // an uninitialized directionIndex so NaN does not propagate into the cache.
+    const current = Number.isInteger(this.directionIndex) ? this.directionIndex : 0
     if (action === 'forward') {
       return
     } else if (action === 'left') {
       this.lastTurnDelta = 1
-      this.directionIndex = (this.directionIndex + 3) % 4
+      this.directionIndex = (current + 3) % 4
       this.direction = SnakeAI.DIRECTION_ORDER[this.directionIndex]
     } else if (action === 'right') {
       this.lastTurnDelta = -1
-      this.directionIndex = (this.directionIndex + 1) % 4
+      this.directionIndex = (current + 1) % 4
       this.direction = SnakeAI.DIRECTION_ORDER[this.directionIndex]
     }
   }
@@ -1352,20 +1382,29 @@ class SnakeAI extends Individual {
       return this.cachedFitness
     }
 
-    // Reset cached stats before re-evaluating
     this.cachedStats = null
-
     const seeds = this.evaluationSeeds || []
 
-    // Run multiple games and average fitness for CONSISTENCY!
     let totalScore = 0
     let totalFoodEaten = 0
     let totalSteps = 0
-    let allVisited = new Set()
     let sumVisitedCounts = 0
-    let maxFoodEaten = 0  // ✅ FIX: Inicializar com 0 ao invés de -Infinity para evitar NaN
+    let maxFoodEaten = 0
     let bestRunSteps = 0
     let bestVisitedSet = null
+
+    // Chrispresso/Greer Viau fitness: monotone in food, smooth gradient.
+    // steps + 2^food + food^2.1 * 500 - food^1.2 * (0.25*steps)^1.3
+    // When food=0 we cap at steps*0.1 so loop-runners can't beat
+    // any snake that ate even a single food.
+    const runFitness = (food, steps) => {
+      const s = Math.max(1, steps)
+      if (food === 0) return s * 0.1
+      const f = Math.min(food, 40)
+      const reward = Math.pow(2, f) + Math.pow(f, 2.1) * 500
+      const penalty = Math.pow(f, 1.2) * Math.pow(0.25 * s, 1.3)
+      return s + reward - penalty
+    }
 
     for (let run = 0; run < FITNESS_RUNS; run++) {
       const runSeed = typeof seeds[run] === 'number' ? seeds[run] : null
@@ -1383,91 +1422,15 @@ class SnakeAI extends Individual {
       this.setRandomSeed(runSeed)
       this.playGame()
 
-      let score = 0
-      const size = this.foodEaten  // Snake size (foods eaten)
-
-      // ⏱️ TIME-DECAY: Use actual values collected during game!
-      // Each food was worth a different amount based on speed
-      const foodReward = this.foodValues.reduce((sum, val) => sum + val, 0)
-      score += foodReward
-
-      // 🎯 SPEED BONUS: Extra reward for consistently fast eating!
-      if (size >= 3) {
-        const avgValue = foodReward / size
-        // If average food value > 7000, give bonus (means consistently fast!)
-        if (avgValue > 7000) {
-          score += 10000 * size  // LEGENDARY speed bonus!
-        }
-      }
-
-      // 🏆 BONUS: Long snakes get HUGE multiplier!
-      if (size >= 10) {
-        score += size * 5000  // Double reward for 10+!
-      }
-      if (size >= 20) {
-        score += size * 10000  // Triple reward for 20+!
-      }
-
-      // 🎯 ADAPTIVE STRATEGY based on snake size!
-      if (size < 6) {
-        // 🚀 SMALL SNAKE: Be AGGRESSIVE! Focus ONLY on food!
-        score += this.stepsCloser * 1500  // Reward approaching food
-        score -= this.stepsFarther * 100  // HARSH penalty for moving away!
-
-        // NO exploration rewards yet - just get food!
-        // (Speed rewards are now handled by time-decay multiplier above)
-
-        // Small survival reward only if actually eating
-        if (size > 0) {
-          score += this.steps * 2  // Very small
-        }
-      } else if (size < 16) {
-        // ⚖️ MEDIUM SNAKE: Balance aggression with caution
-        score += this.stepsCloser * 800
-        score -= this.stepsFarther * 30
-
-        // Small exploration reward (but food is still 100x more important!)
-        score += this.visited.size * 50  // Reduced from 100
-        score += this.steps * 5  // Small survival bonus
-      } else {
-        // 🐉 LARGE SNAKE: SURVIVAL MODE! Now exploration matters!
-        score += this.steps * 50  // Survival important
-        score += this.visited.size * 200  // Zig-zag exploration
-        score += this.stepsCloser * 400
-
-        // Mega bonus for epic endgame survival
-        if (this.steps >= 300) {
-          score += 50000  // LEGEND status!
-        }
-      }
-
-      // 📍 Reward for getting close (important for learning!)
-      if (this.closestToFood < Infinity) {
-        const maxDist = GRID_SIZE * 2
-        const proximity = (maxDist - this.closestToFood) * 300
-        score += size < 6 ? proximity * 2 : proximity
-      }
-
-      // 🛡️ MEGA BONUS: Survived long with big body!
-      if (this.snake.length >= 10 && this.steps >= 200) {
-        score += 30000  // Avoiding self-collision is HARD!
-      }
-
-      totalScore += score
-
-      // 📊 Track stats across ALL runs (for REALISTIC average!)
+      totalScore += runFitness(this.foodEaten, this.steps)
       totalFoodEaten += this.foodEaten
       totalSteps += this.steps
       sumVisitedCounts += this.visited.size
-      for (const tile of this.visited) {
-        allVisited.add(tile)
-      }
 
       if (
         run === 0 ||
         this.foodEaten > maxFoodEaten ||
-        (this.foodEaten === maxFoodEaten && this.visited.size > (bestVisitedSet?.size || 0)) ||
-        (this.foodEaten === maxFoodEaten && this.visited.size === (bestVisitedSet?.size || 0) && this.steps > bestRunSteps)
+        (this.foodEaten === maxFoodEaten && this.steps > bestRunSteps)
       ) {
         maxFoodEaten = this.foodEaten
         bestRunSteps = this.steps
@@ -1479,19 +1442,14 @@ class SnakeAI extends Individual {
     const avgSteps = totalSteps / FITNESS_RUNS
     const avgTiles = sumVisitedCounts / FITNESS_RUNS
 
-    // 📈 Persist best-run stats for reporting / champion export
     this.foodEaten = maxFoodEaten
     this.steps = bestRunSteps
     this.visited = bestVisitedSet ? new Set(bestVisitedSet) : new Set(this.visited)
     const tilesBest = this.visited.size
 
-    const baseScore = Math.floor(totalScore / FITNESS_RUNS)
-    const bestRunBonus =
-      (maxFoodEaten ** 2) * 3000 +           // Supercharge best food count
-      tilesBest * 150 +                      // Exploration in best run
-      bestRunSteps * 40                      // Survival credit
-
-    const finalScore = baseScore + bestRunBonus
+    const finalScore = totalScore / FITNESS_RUNS
+    const baseScore = finalScore
+    const bestRunBonus = 0
 
     // Cache stats for reuse within the generation
     this.cachedFitness = finalScore
@@ -1894,6 +1852,10 @@ async function evolve() {
       `Fit=${bestFitness.toString().padStart(8)} | ` +
       `Avg=${Math.floor(avgFit).toString().padStart(7)}`
     )
+
+    if (gen.history.length >= 2 && i % 5 === 0) {
+      console.log(`     ${sparkline(gen.history, { metric: 'best', width: 60 })}`)
+    }
 
     // Stop if stuck for too long
     if (noImprovementCount >= 150) {
