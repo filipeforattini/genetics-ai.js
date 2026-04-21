@@ -40,7 +40,7 @@ describe('Genome.mutateSplitConnection', () => {
     
     // Check weights
     expect(conn1.data).toBe(10) // Preserved
-    expect(conn2.data).toBe(15) // Identity/Max
+    expect(conn2.data).toBe(14) // Max weight (15 reserved as advanced-base sentinel)
     
     // Check bias
     const bias = newBases.find(b => b.type === 'bias')

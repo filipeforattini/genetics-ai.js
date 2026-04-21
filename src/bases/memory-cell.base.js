@@ -1,31 +1,24 @@
 import { BitBuffer } from '../bitbuffer.class.js'
 
+const ADVANCED_SENTINEL = 0b11110
+const TYPE_ID = 0b011
+
 /**
  * MemoryCellBase - Bit-level encoding for temporal memory storage
  *
- * Format: [type:3='011'][cellId:9][decay:5][persistence:3]
+ * Format: [sentinel:5=11110][type:3='011'][cellId:9][decay:5][persistence:3]
  *
- * - type: 011 (MemoryCell identifier)
+ * - sentinel: 11110 (reserved; tells basic parser to defer)
+ * - type: 011 (MemoryCell identifier among advanced bases)
  * - cellId: 0-511 unique memory cell identifier
  * - decay: 0-31 exponential decay rate per tick
  * - persistence: 0-7 (0=volatile, 7=permanent)
  *
- * Memory cells store floating-point values that decay over time,
- * allowing temporal information processing and short-term memory.
- *
- * Example: Memory cell #17 with medium decay
- * 011 000010001 10101 101
- * │   │         │     │
- * │   │         │     └─ persistence: 5 (high)
- * │   │         └─ decay: 21 (medium)
- * │   └─ cell #17
- * └─ type: MemoryCell
- *
- * Total: 20 bits
+ * Total: 25 bits
  */
 export class MemoryCellBase {
   // Bit length constant
-  static BIT_LENGTH = 20
+  static BIT_LENGTH = 25
 
   /**
    * Parse memory cell from BitBuffer
@@ -36,21 +29,17 @@ export class MemoryCellBase {
   static fromBitBuffer(buffer, position = 0) {
     const totalBits = buffer.bitLength || (buffer.buffer.length * 8)
 
-    // Need exactly 20 bits
     if (position + MemoryCellBase.BIT_LENGTH > totalBits) return null
 
-    // Read type (3 bits) - should be 011
-    const typeId = buffer.readBits(3, position)
-    if (typeId !== 0b011) return null
+    // Sentinel (5 bits) — distinguishes from any basic base
+    if (buffer.readBits(5, position) !== ADVANCED_SENTINEL) return null
 
-    // Read cell ID (9 bits)
-    const cellId = buffer.readBits(9, position + 3)
+    // Type ID (3 bits) within the advanced-base namespace
+    if (buffer.readBits(3, position + 5) !== TYPE_ID) return null
 
-    // Read decay rate (5 bits)
-    const decay = buffer.readBits(5, position + 12)
-
-    // Read persistence (3 bits)
-    const persistence = buffer.readBits(3, position + 17)
+    const cellId = buffer.readBits(9, position + 8)
+    const decay = buffer.readBits(5, position + 17)
+    const persistence = buffer.readBits(3, position + 22)
 
     return {
       type: 'memory_cell',
@@ -70,16 +59,10 @@ export class MemoryCellBase {
   static toBitBuffer(base) {
     const buffer = new BitBuffer(MemoryCellBase.BIT_LENGTH)
 
-    // Write type (3 bits): 011
-    buffer.writeBits(0b011, 3)
-
-    // Write cell ID (9 bits)
+    buffer.writeBits(ADVANCED_SENTINEL, 5)       // sentinel
+    buffer.writeBits(TYPE_ID, 3)                 // 011
     buffer.writeBits(base.cellId & 0b111111111, 9)
-
-    // Write decay rate (5 bits)
     buffer.writeBits(base.decay & 0b11111, 5)
-
-    // Write persistence (3 bits)
     buffer.writeBits(base.persistence & 0b111, 3)
 
     return buffer
@@ -189,8 +172,10 @@ export class MemoryCellBase {
    * @param {number} mutationRate - Mutation rate per bit
    */
   static mutateBinary(buffer, position, mutationRate = 0.01) {
-    // Bit-flip mutations
-    for (let i = 0; i < MemoryCellBase.BIT_LENGTH; i++) {
+    // Keep the 8-bit sentinel+type prefix intact; mutations there would
+    // turn the base into unparseable garbage that the genome parser skips.
+    const PREFIX_BITS = 8
+    for (let i = PREFIX_BITS; i < MemoryCellBase.BIT_LENGTH; i++) {
       if (Math.random() < mutationRate) {
         const currentBit = buffer.getBit(position + i)
         buffer.setBit(position + i, currentBit ? 0 : 1)

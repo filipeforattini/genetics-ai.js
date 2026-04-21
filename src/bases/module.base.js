@@ -1,60 +1,31 @@
 import { BitBuffer } from '../bitbuffer.class.js'
 
+const ADVANCED_SENTINEL = 0b11110
+const TYPE_ID = 0b100
+const HEADER_BITS = 5 + 3 + 8 + 8  // sentinel + typeId + moduleId + length
+
 /**
  * ModuleBase - Bit-level encoding for hierarchical sub-networks
  *
- * Format: [type:3='100'][moduleId:8][length:8][moduleGenome:length*8bits]
+ * Format: [sentinel:5=11110][type:3='100'][moduleId:8][length:8][moduleGenome:length*8bits]
  *
- * - type: 100 (Module identifier)
- * - moduleId: 0-255 module type identifier
- * - length: 0-255 bytes of encapsulated genome
- * - moduleGenome: Raw genome bytes (complete sub-network)
- *
- * Modules allow hierarchical networks - a module is a complete
- * sub-network encoded as a reusable component with its own
- * connections, biases, and other bases.
- *
- * Example: Module #3 with 10-byte genome
- * 100 00000011 00001010 [80 bits of genome...]
- * │   │        │        │
- * │   │        │        └─ Encapsulated genome
- * │   │        └─ 10 bytes length
- * │   └─ module #3
- * └─ type: Module
- *
- * Total: 3 + 8 + 8 + (length * 8) bits
+ * Total: 24 + (length * 8) bits
  */
 export class ModuleBase {
-  /**
-   * Parse module from BitBuffer
-   * @param {BitBuffer} buffer - Source buffer
-   * @param {number} position - Bit position to start reading
-   * @returns {Object|null} Parsed base or null if invalid
-   */
   static fromBitBuffer(buffer, position = 0) {
     const totalBits = buffer.bitLength || (buffer.buffer.length * 8)
 
-    // Need at least 19 bits (type + moduleId + length)
-    if (position + 19 > totalBits) return null
+    if (position + HEADER_BITS > totalBits) return null
+    if (buffer.readBits(5, position) !== ADVANCED_SENTINEL) return null
+    if (buffer.readBits(3, position + 5) !== TYPE_ID) return null
 
-    // Read type (3 bits) - should be 100
-    const typeId = buffer.readBits(3, position)
-    if (typeId !== 0b100) return null
+    const moduleId = buffer.readBits(8, position + 8)
+    const length = buffer.readBits(8, position + 16)
+    const bitLength = HEADER_BITS + (length * 8)
 
-    // Read module ID (8 bits)
-    const moduleId = buffer.readBits(8, position + 3)
-
-    // Read length in bytes (8 bits)
-    const length = buffer.readBits(8, position + 11)
-
-    // Calculate total bit length
-    const bitLength = 19 + (length * 8)
-
-    // Check if we have enough bits
     if (position + bitLength > totalBits) return null
 
-    // Read module genome (length * 8 bits)
-    const moduleGenome = buffer.slice(position + 19, position + bitLength)
+    const moduleGenome = buffer.slice(position + HEADER_BITS, position + bitLength)
 
     return {
       type: 'module',
@@ -62,30 +33,19 @@ export class ModuleBase {
       length,
       moduleGenome,
       bitLength,
-      data: moduleId  // Compatibility with Base class
+      data: moduleId
     }
   }
 
-  /**
-   * Convert module to BitBuffer
-   * @param {Object} base - Base object with moduleGenome (BitBuffer)
-   * @returns {BitBuffer} Encoded buffer
-   */
   static toBitBuffer(base) {
     const length = base.length || Math.ceil(base.moduleGenome.bitLength / 8)
-    const bitLength = 19 + (length * 8)
+    const bitLength = HEADER_BITS + (length * 8)
     const buffer = new BitBuffer(bitLength)
 
-    // Write type (3 bits): 100
-    buffer.writeBits(0b100, 3)
-
-    // Write module ID (8 bits)
+    buffer.writeBits(ADVANCED_SENTINEL, 5)
+    buffer.writeBits(TYPE_ID, 3)
     buffer.writeBits(base.moduleId & 0xFF, 8)
-
-    // Write length (8 bits)
     buffer.writeBits(length & 0xFF, 8)
-
-    // Append module genome
     buffer.append(base.moduleGenome)
 
     return buffer
@@ -152,7 +112,7 @@ export class ModuleBase {
    * @returns {number} Total bit length
    */
   static calculateBitLength(lengthBytes) {
-    return 19 + (lengthBytes * 8)
+    return HEADER_BITS + (lengthBytes * 8)
   }
 
   /**
@@ -168,20 +128,20 @@ export class ModuleBase {
       canChangeLength = false  // Dangerous - can corrupt genome
     } = options
 
-    // Read current length
-    const length = buffer.readBits(8, position + 11)
+    // Header layout: sentinel(5) + typeId(3) + moduleId(8) + length(8)
+    const MODULE_ID_OFFSET = 8   // after sentinel+typeId
+    const LENGTH_OFFSET = 16     // after sentinel+typeId+moduleId
+    const GENOME_OFFSET = 24     // after full header
+
+    const length = buffer.readBits(8, position + LENGTH_OFFSET)
     const bitLength = ModuleBase.calculateBitLength(length)
 
-    // Type 1: Module ID mutations
     if (canChangeModuleId && Math.random() < 0.05) {
-      // 5% chance to change module ID
       const newModuleId = Math.floor(Math.random() * 256)
-      buffer.writeBits(newModuleId, 8, position + 3)
+      buffer.writeBits(newModuleId, 8, position + MODULE_ID_OFFSET)
     }
 
-    // Type 2: Genome content mutations
-    // Mutate encapsulated genome bits
-    const genomeStart = position + 19
+    const genomeStart = position + GENOME_OFFSET
     const genomeLength = length * 8
 
     for (let i = 0; i < genomeLength; i++) {

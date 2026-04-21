@@ -267,10 +267,13 @@ function ensureAdvancedBases(genome, context = {}) {
       appendBase(genome, generator())
       attempts++
     }
-    if (attempts >= maxAttempts && !warned.has(type)) {
+    // Post-mutation genomes sometimes lose advanced bases to bit flips that
+    // misalign the variable-length encoding. Surface only under SNAKE_DEBUG_BASES;
+    // in normal training we just move on with whatever count we reached.
+    if (attempts >= maxAttempts && !warned.has(type) && process.env.SNAKE_DEBUG_BASES) {
       warned.add(type)
       const got = genome.countBasesByType(type)
-      console.warn(`[ensureAdvancedBases] gave up on '${type}' at ${got}/${desired} after ${attempts} attempts — likely base-encoding bug`)
+      console.warn(`[ensureAdvancedBases] ${type} at ${got}/${desired} after ${attempts} attempts`)
     }
   }
 
@@ -640,18 +643,21 @@ class SnakeAI extends Individual {
   castRay(rayIdx) {
     // Individual's brain build invokes sensor ticks before reset() runs,
     // so directionIndex/head may still be undefined on first call.
-    if (!this.head || this.directionIndex === undefined) {
+    const dirIdx = this.directionIndex
+    if (!this.head || !Number.isInteger(dirIdx) || dirIdx < 0 || dirIdx > 3) {
       return { wall: 0, food: 0, body: 0 }
     }
-    const stamp = this.steps
-    if (this._rayCacheStamp !== stamp) {
+    const stamp = this.steps ?? 0
+    // Initialize or refresh the ray cache. `_rayCache` can be undefined on
+    // the very first call (constructor defers allocation).
+    if (!this._rayCache || this._rayCacheStamp !== stamp) {
       this._rayCacheStamp = stamp
       this._rayCache = new Array(8)
     }
     const cached = this._rayCache[rayIdx]
     if (cached !== undefined) return cached
 
-    const offsets = SnakeAI.RAY_OFFSETS_BY_HEADING[this.directionIndex]
+    const offsets = SnakeAI.RAY_OFFSETS_BY_HEADING[dirIdx]
     const [dx, dy] = offsets[rayIdx]
     let x = this.head.x
     let y = this.head.y
@@ -1188,18 +1194,19 @@ class SnakeAI extends Individual {
   }
 
   turn(action) {
-    // RELATIVE ACTIONS - much easier to learn!
-    // ⚡ PERFORMANCE: Use cached directionIndex ao invés de indexOf()
     this.lastTurnDelta = 0
+    // Actions may fire during brain construction (before reset()). Guard against
+    // an uninitialized directionIndex so NaN does not propagate into the cache.
+    const current = Number.isInteger(this.directionIndex) ? this.directionIndex : 0
     if (action === 'forward') {
       return
     } else if (action === 'left') {
       this.lastTurnDelta = 1
-      this.directionIndex = (this.directionIndex + 3) % 4
+      this.directionIndex = (current + 3) % 4
       this.direction = SnakeAI.DIRECTION_ORDER[this.directionIndex]
     } else if (action === 'right') {
       this.lastTurnDelta = -1
-      this.directionIndex = (this.directionIndex + 1) % 4
+      this.directionIndex = (current + 1) % 4
       this.direction = SnakeAI.DIRECTION_ORDER[this.directionIndex]
     }
   }

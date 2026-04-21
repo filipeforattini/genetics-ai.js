@@ -1,32 +1,14 @@
 import { BitBuffer } from '../bitbuffer.class.js'
 
+const ADVANCED_SENTINEL = 0b11110
+const TYPE_ID = 0b010
+
 /**
  * LearningRuleBase - Bit-level encoding for synaptic learning rules
  *
- * Format: [type:3='010'][ruleType:3][connId:10][rate:5][decay:2]
+ * Format: [sentinel:5=11110][type:3='010'][ruleType:3][connId:10][rate:5][decay:2]
  *
- * - type: 010 (LearningRule identifier)
- * - ruleType:
- *   000 = Hebbian ("fire together, wire together")
- *   001 = Anti-Hebbian (decorrelation)
- *   010 = STDP (Spike-Timing-Dependent Plasticity)
- *   011 = BCM (Bienenstock-Cooper-Munro)
- *   100 = Oja's Rule (weight normalization)
- *   101-111 = Reserved
- * - connId: 0-1023 connection index to modify
- * - rate: 0-31 learning rate (scaled to 0.0-1.0)
- * - decay: 00=none, 01=slow, 10=medium, 11=fast
- *
- * Example: Hebbian learning on connection #42, rate 0.5
- * 010 000 0000101010 01111 10
- * │   │   │          │     │
- * │   │   │          │     └─ decay: medium
- * │   │   │          └─ rate: 15 (= 0.5)
- * │   │   └─ connection #42
- * │   └─ Hebbian
- * └─ type: LearningRule
- *
- * Total: 23 bits
+ * Total: 28 bits
  */
 export class LearningRuleBase {
   // Learning rule type constants
@@ -42,36 +24,19 @@ export class LearningRuleBase {
   static DECAY_MEDIUM = 0b10
   static DECAY_FAST = 0b11
 
-  // Bit length constant
-  static BIT_LENGTH = 23
+  static BIT_LENGTH = 28
 
-  /**
-   * Parse learning rule from BitBuffer
-   * @param {BitBuffer} buffer - Source buffer
-   * @param {number} position - Bit position to start reading
-   * @returns {Object|null} Parsed base or null if invalid
-   */
   static fromBitBuffer(buffer, position = 0) {
     const totalBits = buffer.bitLength || (buffer.buffer.length * 8)
 
-    // Need exactly 23 bits
     if (position + LearningRuleBase.BIT_LENGTH > totalBits) return null
+    if (buffer.readBits(5, position) !== ADVANCED_SENTINEL) return null
+    if (buffer.readBits(3, position + 5) !== TYPE_ID) return null
 
-    // Read type (3 bits) - should be 010
-    const typeId = buffer.readBits(3, position)
-    if (typeId !== 0b010) return null
-
-    // Read rule type (3 bits)
-    const ruleType = buffer.readBits(3, position + 3)
-
-    // Read connection ID (10 bits)
-    const connId = buffer.readBits(10, position + 6)
-
-    // Read learning rate (5 bits)
-    const rate = buffer.readBits(5, position + 16)
-
-    // Read decay (2 bits)
-    const decay = buffer.readBits(2, position + 21)
+    const ruleType = buffer.readBits(3, position + 8)
+    const connId = buffer.readBits(10, position + 11)
+    const rate = buffer.readBits(5, position + 21)
+    const decay = buffer.readBits(2, position + 26)
 
     return {
       type: 'learning_rule',
@@ -80,31 +45,18 @@ export class LearningRuleBase {
       rate,
       decay,
       bitLength: LearningRuleBase.BIT_LENGTH,
-      data: ruleType  // Compatibility with Base class
+      data: ruleType
     }
   }
 
-  /**
-   * Convert learning rule to BitBuffer
-   * @param {Object} base - Base object
-   * @returns {BitBuffer} Encoded buffer
-   */
   static toBitBuffer(base) {
     const buffer = new BitBuffer(LearningRuleBase.BIT_LENGTH)
 
-    // Write type (3 bits): 010
-    buffer.writeBits(0b010, 3)
-
-    // Write rule type (3 bits)
+    buffer.writeBits(ADVANCED_SENTINEL, 5)
+    buffer.writeBits(TYPE_ID, 3)
     buffer.writeBits(base.ruleType & 0b111, 3)
-
-    // Write connection ID (10 bits)
     buffer.writeBits(base.connId & 0b1111111111, 10)
-
-    // Write learning rate (5 bits)
     buffer.writeBits(base.rate & 0b11111, 5)
-
-    // Write decay (2 bits)
     buffer.writeBits(base.decay & 0b11, 2)
 
     return buffer
@@ -239,8 +191,8 @@ export class LearningRuleBase {
    * @param {number} mutationRate - Mutation rate per bit
    */
   static mutateBinary(buffer, position, mutationRate = 0.01) {
-    // Bit-flip mutations
-    for (let i = 0; i < LearningRuleBase.BIT_LENGTH; i++) {
+    const PREFIX_BITS = 8  // sentinel(5) + typeId(3) — stays intact
+    for (let i = PREFIX_BITS; i < LearningRuleBase.BIT_LENGTH; i++) {
       if (Math.random() < mutationRate) {
         const currentBit = buffer.getBit(position + i)
         buffer.setBit(position + i, currentBit ? 0 : 1)

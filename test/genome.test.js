@@ -176,18 +176,18 @@ describe('genome', () => {
     })
 
     test('handles maximum values', () => {
+      // Connection max weight is 14 (15 is reserved as the advanced-base sentinel)
       const bases = [
-        { type: 'connection', data: 15, source: { type: 'sensor', id: 255 }, target: { type: 'neuron', id: 255 } },
+        { type: 'connection', data: 14, source: { type: 'sensor', id: 255 }, target: { type: 'neuron', id: 255 } },
         { type: 'bias', data: 7, target: { type: 'action', id: 255 } }
       ]
-      
+
       const genome = Genome.fromBases(bases)
       const decoded = Genome.fromString(genome.encoded)
-      
-      // Check essential properties (IDs limited to 255 for proper encoding)
+
       expect(decoded.bases.length).toBe(bases.length)
       expect(decoded.bases[0].type).toBe('connection')
-      expect(decoded.bases[0].data).toBe(15)
+      expect(decoded.bases[0].data).toBe(14)
       expect(decoded.bases[0].source.id).toBe(255)
       expect(decoded.bases[0].target.id).toBe(255)
       expect(decoded.bases[1].type).toBe('bias')

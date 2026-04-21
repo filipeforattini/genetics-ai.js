@@ -360,8 +360,8 @@ class SnakeAI extends Individual {
     if (!this.head || !this.direction) {
       return { wall: 0, food: 0, body: 0 }
     }
-    const stamp = this.steps
-    if (this._rayCacheStamp !== stamp) {
+    const stamp = this.steps ?? 0
+    if (!this._rayCache || this._rayCacheStamp !== stamp) {
       this._rayCacheStamp = stamp
       this._rayCache = new Array(8)
     }
